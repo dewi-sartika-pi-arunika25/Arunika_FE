@@ -1,16 +1,23 @@
-// src/app/page.js
-import Hero from "@/components/Hero";
-import FeatureCards from "@/components/FeatureCards";
-import CTA from "@/components/CTA";
-import PricingSection from "@/components/pricing/PricingSection";
+import React from 'react';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
+import Hero from './components/Hero';
+import FeatureRow from "@/components/feature/FeatureRow";
 
-export default function Page() {
+import PricingSection from '../components/pricing/PricingSection';
+
+export default function HomePage() {
   return (
-    <main>
-      <Hero />
-      <FeatureCards />
-      <PricingSection />
-      <CTA />
-    </main>
+    <>
+      <Navbar />
+      <main className="container mx-auto px-4 py-10">
+        <Hero />
+        <FeatureRow /> 
+        <PricingSection />
+      </main>
+      <Footer />
+    </>
   );
 }
+
+
