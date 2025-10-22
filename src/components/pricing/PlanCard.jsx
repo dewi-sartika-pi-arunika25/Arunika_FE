@@ -9,47 +9,54 @@ export default function PlanCard({
   highlighted = false,
   tag,
 }) {
-  // warna dari palette CSS variables
-  const primary = "var(--primary)";
-  const accent1 = "var(--accent-1)"; // #FAE13C
-  const accent2 = "var(--accent-2)"; // #E4B200
+  const primary = "var(--primary)";    // #FF8300
+  const accent2 = "var(--accent-2)";   // #E4B200
+  const text    = "var(--foreground)"; // #2B2B2B (light) / #FFFDF4 (dark)
 
-  // Wrapper gradient border ketika highlighted
   const Wrapper = ({ children }) =>
     highlighted ? (
       <div
-        className="rounded-2xl p-[2px]"
-        style={{
-          background:
-            `linear-gradient(45deg, ${accent1}, ${accent2}, ${primary})`,
-        }}
+        className="rounded-2xl"
+        style={{ border: `2px solid ${accent2}`, background: "var(--pricing-surface)" }}
       >
-        <div className="rounded-2xl bg-white/90 dark:bg-white/95">{children}</div>
+        {children}
       </div>
     ) : (
-      <div className="rounded-2xl border bg-white/80">{children}</div>
+      <div
+        className="rounded-2xl"
+        style={{ border: "1px solid var(--pricing-border)", background: "var(--pricing-surface)" }}
+      >
+        {children}
+      </div>
     );
 
   return (
     <Wrapper>
       <div className="relative p-6 sm:p-7 flex flex-col h-full">
         {highlighted && (
-          <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold text-white"
-                style={{ background: "var(--destructive, #E43D3D)" }}>
-            {tag || "Populer"}
+          <span
+            className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold text-white"
+            style={{ background: primary }}
+          >
+            {tag || "Paling Populer"}
           </span>
         )}
 
-        <h3 className={`text-lg font-semibold ${highlighted ? "text-[var(--destructive,#E43D3D)]" : "text-neutral-600"}`}>
+        <h3
+          className="text-lg font-semibold"
+          style={{ color: highlighted ? primary : text }}
+        >
           {name}
         </h3>
 
         <div className="mt-2">
-          <div className="text-4xl font-bold">{price}</div>
-          <div className="text-sm text-neutral-500">{cadence}</div>
+          <div className="text-4xl font-bold" style={{ color: text }}>{price}</div>
+          <div className="text-sm" style={{ color: "color-mix(in oklab, var(--foreground) 65%, #0000)" }}>
+            {cadence}
+          </div>
         </div>
 
-        <ul className="mt-5 space-y-3 flex-1 text-sm">
+        <ul className="mt-5 space-y-3 flex-1 text-sm" style={{ color: text }}>
           {features.map((f) => (
             <li key={f} className="flex items-start gap-2">
               <svg
@@ -69,15 +76,15 @@ export default function PlanCard({
 
         {highlighted ? (
           <button
-            className="mt-6 inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-semibold text-white transition"
-            style={{ background: "var(--destructive, #E43D3D)" }}
+            className="mt-6 inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-semibold text-white transition hover:opacity-90"
+            style={{ background: primary }}
           >
             {cta}
           </button>
         ) : (
           <button
-            className="mt-6 inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-semibold border transition hover:bg-white"
-            style={{ borderColor: primary, color: primary }}
+            className="mt-6 inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition hover:bg-white"
+            style={{ border: `1px solid ${primary}`, color: primary, background: "transparent" }}
           >
             {cta}
           </button>
