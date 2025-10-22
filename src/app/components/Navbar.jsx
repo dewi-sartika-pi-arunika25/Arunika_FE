@@ -1,69 +1,127 @@
-// components/Navbar.jsx
-import Link from 'next/link';
-import { Button } from '@/components/ui/button'; 
-import { BookOpen, Map, Users } from 'lucide-react'; 
+// src/app/components/Navbar.jsx
+"use client";
 
-// Data Navigasi
-const navItems = [
-  { name: "Lab Career", href: "/lab-career", icon: BookOpen },
-  { name: "Roadmap", href: "/roadmap", icon: Map },
-  { name: "About Us", href: "/about-us", icon: Users },
+import Link from "next/link";
+import { useState } from "react";
+import { BookOpen, Map, Users, Menu } from "lucide-react";
+
+const nav = [
+  { label: "Lab Career", href: "/lab-career", icon: BookOpen },
+  { label: "Roadmap",   href: "/roadmap",     icon: Map },
+  { label: "About Us",  href: "/about-us",    icon: Users },
 ];
 
-// Komponen Logo
-const Logo = () => (
-  <div className="flex items-center text-xl font-montserrat text-orange-900">
-    <span className="text-3xl mr-1 leading-none">👑</span> 
-    <span className="font-bold tracking-wider">Arunika</span>
-  </div>
-);
+export default function Navbar() {
+  const [open, setOpen] = useState(false);
 
-const Navbar = () => {
   return (
-    <header className="sticky top-0 z-50 bg-[#FAE13C] shadow-lg">
-      <nav className="container mx-auto px-4 sm:px-6 lg:px-8 py-3">
-        <div className="flex justify-between items-center h-16">
-          
-          {/* Logo di kiri */}
-          <Logo />
+    // transparan, TANPA background & TANPA border
+    <header className="sticky top-2 z-50">
+      {/* container ringan */}
+      <nav className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* pill */}
+        <div
+          className="mx-auto flex items-center justify-between gap-4 rounded-full border px-4 sm:px-6 py-2 shadow-sm"
+          style={{
+            background: "var(--accent-3)", // #F7E6A4
+            borderColor: "color-mix(in oklab, #000 8%, var(--accent-3))",
+          }}
+        >
+          {/* logo */}
+          <Link
+            href="/"
+            className="flex items-center text-xl font-semibold"
+            style={{ color: "var(--text)" }}
+          >
+            <span className="mr-1 text-2xl leading-none">👑</span> Arunika
+          </Link>
 
-          {/* Navigasi utama (desktop) */}
-          <div className="hidden lg:flex space-x-6 items-center">
-            {navItems.map((item) => (
-              <Link key={item.name} href={item.href} legacyBehavior passHref>
-                <a className="flex items-center space-x-2 text-orange-900 text-base font-medium hover:text-orange-700 transition-colors">
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.name}</span>
-                </a>
+          {/* nav desktop */}
+          <div className="hidden md:flex items-center gap-6">
+            {nav.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                className="inline-flex items-center gap-2 transition"
+                style={{ color: "color-mix(in oklab, var(--text) 85%, transparent)" }}
+              >
+                <n.icon className="h-5 w-5" />
+                <span className="text-sm font-medium">{n.label}</span>
               </Link>
             ))}
           </div>
 
-          {/* Tombol aksi */}
-          <div className="flex items-center space-x-3">
-            {/* Tombol Masuk */}
-            <Button
-              asChild
-              className="px-6 py-2 rounded-full font-semibold text-white 
-                         bg-gradient-to-r from-yellow-500 to-orange-500 
-                         hover:from-orange-300 hover:to-orange-400 transition-all 
-                         shadow-lg shadow-purple-500/50"
+          {/* actions */}
+          <div className="hidden sm:flex items-center gap-2">
+            <Link
+              href="/login"
+              className="rounded-full px-4 py-2 text-sm font-semibold transition hover:bg-white/60"
+              style={{ color: "var(--text)" }}
             >
-              <Link href="/login">Masuk</Link>
-            </Button>
-
-            {/* Tombol Daftar */}
-            <Button
-              asChild
-              className="px-6 py-2 rounded-full font-semibold text-white bg-orange-400 hover:bg-orange-500 transition-colors"
+              Masuk
+            </Link>
+            <Link
+              href="/register"
+              className="rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ background: "var(--primary)" }} /* #FF8300 */
             >
-              <Link href="/register">Daftar</Link>
-            </Button>
+              Daftar
+            </Link>
           </div>
+
+          {/* mobile menu button */}
+          <button
+            className="md:hidden rounded-full p-2"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Menu"
+          >
+            <Menu className="h-6 w-6" style={{ color: "var(--text)" }} />
+          </button>
         </div>
+
+        {/* mobile drawer */}
+        {open && (
+          <div
+            className="md:hidden mt-2 rounded-2xl border p-3"
+            style={{
+              background: "var(--bg)", // pakai warna halaman
+              borderColor: "color-mix(in oklab, #000 10%, var(--bg))",
+            }}
+          >
+            <div className="flex flex-col gap-2">
+              {nav.map((n) => (
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className="rounded-lg px-3 py-2 transition hover:bg-[var(--accent-3)]/60"
+                  style={{ color: "color-mix(in oklab, var(--text) 85%, transparent)" }}
+                  onClick={() => setOpen(false)}
+                >
+                  {n.label}
+                </Link>
+              ))}
+              <div className="mt-1 flex items-center gap-2">
+                <Link
+                  href="/login"
+                  className="rounded-md px-3 py-2 transition hover:bg-[var(--accent-3)]/60"
+                  style={{ color: "var(--text)" }}
+                  onClick={() => setOpen(false)}
+                >
+                  Masuk
+                </Link>
+                <Link
+                  href="/register"
+                  className="rounded-md px-3 py-2 text-white transition hover:opacity-90"
+                  style={{ background: "var(--primary)" }}
+                  onClick={() => setOpen(false)}
+                >
+                  Daftar
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
     </header>
   );
-};
-
-export default Navbar;
+}
