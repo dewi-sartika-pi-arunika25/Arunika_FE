@@ -1,6 +1,6 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useRef } from "react";
-
 
 export default function Hero() {
   const bgRef = useRef(null);
@@ -11,17 +11,13 @@ export default function Hero() {
 
     const onScroll = () => {
       const y = window.scrollY || 0;
-      if (bgRef.current) {
-        bgRef.current.style.transform = `translate3d(0, ${y * 0.12}px, 0)`;
-      }
-      if (contentRef.current) {
-        contentRef.current.style.transform = `translate3d(0, ${-y * 0.06}px, 0)`;
-      }
+      if (bgRef.current) bgRef.current.style.transform = `translate3d(0, ${y * 0.12}px, 0)`;
+      if (contentRef.current) contentRef.current.style.transform = `translate3d(0, ${-y * 0.06}px, 0)`;
     };
 
     const onMouseMove = (e) => {
       const { innerWidth: w, innerHeight: h } = window;
-      const mx = (e.clientX - w / 2) / w; // -0.5..0.5
+      const mx = (e.clientX - w / 2) / w;
       const my = (e.clientY - h / 2) / h;
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
@@ -46,12 +42,8 @@ export default function Hero() {
       <div
         ref={bgRef}
         className="absolute inset-0 -z-10 bg-center bg-cover"
-        style={{
-          backgroundImage: `url('/hero.jpg')`,
-          backgroundColor: "var(--bg)",
-        }}
+        style={{ backgroundImage: `url('/hero.jpg')`, backgroundColor: "var(--bg)" }}
       />
-
       <div
         className="absolute inset-0 -z-10"
         style={{
@@ -59,7 +51,6 @@ export default function Hero() {
             "linear-gradient(to top, rgba(255,253,244,0.95), rgba(255,253,244,0.80) 40%, rgba(255,253,244,0.55))",
         }}
       />
-
       <div
         aria-hidden
         className="absolute inset-0 -z-10"
@@ -69,13 +60,8 @@ export default function Hero() {
         }}
       />
 
-      <div
-        ref={contentRef}
-        className="px-6 sm:px-10 md:px-14 lg:px-20 py-16 sm:py-20 lg:py-24 text-center"
-      >
-        <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-[var(--accent-2)]">
-          Perempuan di Tech
-        </p>
+      <div ref={contentRef} className="px-6 sm:px-10 md:px-14 lg:px-20 py-16 sm:py-20 lg:py-24 text-center">
+        <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-[var(--accent-2)]">Perempuan di Tech</p>
 
         <h1 className="mt-3 text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mx-auto max-w-4xl">
           Jika karier adalah musik, <br className="hidden sm:block" />
@@ -83,18 +69,20 @@ export default function Hero() {
         </h1>
 
         <p className="mt-5 text-lg text-[color:var(--text)]/80 max-w-2xl mx-auto">
-          Arunika memadukan AI dan komunitas untuk memetakan jalur karier,
-          membangun portofolio, dan menghubungkanmu dengan mentor relevan.
+          Arunika memadukan AI dan komunitas untuk memetakan jalur karier, membangun portofolio, dan menghubungkanmu
+          dengan mentor relevan.
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="/signup"
+          {/* ✅ arahkan ke /skill-match */}
+          <Link
+            href="/skill-match"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold text-white"
             style={{ background: "var(--primary)" }}
           >
             Mulai Gratis
-          </a>
+          </Link>
+
           <a
             href="#cara-kerja"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium border"
