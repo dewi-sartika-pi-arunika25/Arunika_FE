@@ -13,7 +13,6 @@ export default function FeatureCard({ icon, title, body, badge }) {
       style={{ borderColor: "var(--border)" }}
     >
       <div className="p-6">
-        {/* Header kecil: icon + badge */}
         <div className="mb-4 flex items-center justify-between gap-3">
           <div
             className="
