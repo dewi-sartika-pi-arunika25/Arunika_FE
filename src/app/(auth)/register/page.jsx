@@ -1,12 +1,14 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { User, Mail, Lock, ArrowRight, Chrome, Home} from 'lucide-react'; 
+import { User, Mail, Lock, ArrowRight, Chrome, Home } from 'lucide-react'; 
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
+import { authAPI } from '@/app/lib/api';
 
 const Separator = () => (
     <div className="relative">
@@ -21,37 +23,75 @@ const Separator = () => (
     </div>
 );
 
-/**
- * Komponen Halaman Pendaftaran (Register) dengan OAuth
- */
 const RegisterPage = () => {
-    // State dan handler form yang sudah ada...
-    const [formData, setFormData] = React.useState({
+    const router = useRouter();
+    const [formData, setFormData] = useState({
         name: '',
         email: '',
         password: '',
         confirmPassword: '',
+        pendidikan: '',
+        pekerjaan: '',
     });
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
     const handleChange = (e) => {
         const { id, value } = e.target;
         setFormData(prev => ({ ...prev, [id]: value }));
+        setError('');
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Logika pendaftaran manual
+        setError('');
+        setSuccess('');
+
         if (formData.password !== formData.confirmPassword) {
-            alert("Kata sandi dan konfirmasi kata sandi tidak cocok!");
+            setError('Kata sandi dan konfirmasi tidak cocok!');
             return;
         }
-        console.log("Data Pendaftaran Manual:", formData);
-        alert("Pendaftaran manual berhasil! (Simulasi)");
+
+        if (formData.password.length < 6) {
+            setError('Kata sandi minimal 6 karakter!');
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            const response = await authAPI.register({
+                name: formData.name,
+                email: formData.email,
+                password: formData.password,
+                pendidikan: formData.pendidikan,
+                pekerjaan: formData.pekerjaan,
+            });
+
+            if (response.data.success) {
+                const { access_token, refresh_token, user } = response.data.data;
+
+                // Simpan tokens
+                localStorage.setItem('access_token', access_token);
+                localStorage.setItem('refresh_token', refresh_token);
+                localStorage.setItem('user', JSON.stringify(user));
+
+                setSuccess('Pendaftaran berhasil! Anda akan diarahkan ke dashboard...');
+                
+                setTimeout(() => {
+                    router.push('/dashboard');
+                }, 2000);
+            }
+        } catch (err) {
+            setError(err.response?.data?.error || 'Pendaftaran gagal. Silakan coba lagi.');
+            console.error('Register error:', err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    // Handler untuk Login/Daftar dengan Google
     const handleGoogleSignIn = () => {
-        
         signIn('google', { callbackUrl: '/dashboard' });
     };
 
@@ -73,7 +113,18 @@ const RegisterPage = () => {
                 </CardHeader>
 
                 <CardContent className="grid gap-4">
-                    {/* Tombol Daftar dengan Google */}
+                    {error && (
+                        <div className="p-3 rounded-md bg-red-100 text-red-700 text-sm border border-red-300">
+                            {error}
+                        </div>
+                    )}
+
+                    {success && (
+                        <div className="p-3 rounded-md bg-green-100 text-green-700 text-sm border border-green-300">
+                            {success}
+                        </div>
+                    )}
+
                     <Button 
                         variant="outline" 
                         onClick={handleGoogleSignIn} 
@@ -85,9 +136,7 @@ const RegisterPage = () => {
 
                     <Separator />
 
-                    {/* Formulir Pendaftaran Manual */}
                     <form onSubmit={handleSubmit} className="grid gap-4">
-                        {/* Input Nama Lengkap */}
                         <div className="grid gap-2">
                             <Label htmlFor="name">Nama Lengkap</Label>
                             <div className="relative">
@@ -100,11 +149,11 @@ const RegisterPage = () => {
                                     onChange={handleChange}
                                     required
                                     className="pl-10"
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
 
-                        {/* Input Email */}
                         <div className="grid gap-2">
                             <Label htmlFor="email">Email</Label>
                             <div className="relative">
@@ -117,11 +166,35 @@ const RegisterPage = () => {
                                     onChange={handleChange}
                                     required
                                     className="pl-10"
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
 
-                        {/* Input Kata Sandi */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="pendidikan">Pendidikan</Label>
+                            <Input
+                                id="pendidikan"
+                                type="text"
+                                placeholder="Mis: S1 Informatika"
+                                value={formData.pendidikan}
+                                onChange={handleChange}
+                                disabled={isLoading}
+                            />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="pekerjaan">Pekerjaan Saat Ini</Label>
+                            <Input
+                                id="pekerjaan"
+                                type="text"
+                                placeholder="Mis: Software Engineer"
+                                value={formData.pekerjaan}
+                                onChange={handleChange}
+                                disabled={isLoading}
+                            />
+                        </div>
+
                         <div className="grid gap-2">
                             <Label htmlFor="password">Kata Sandi</Label>
                             <div className="relative">
@@ -129,17 +202,17 @@ const RegisterPage = () => {
                                 <Input
                                     id="password"
                                     type="password"
-                                    placeholder="Minimal 8 karakter"
+                                    placeholder="Minimal 6 karakter"
                                     value={formData.password}
                                     onChange={handleChange}
                                     required
-                                    minLength={8}
+                                    minLength={6}
                                     className="pl-10"
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
 
-                        {/* Input Konfirmasi Kata Sandi */}
                         <div className="grid gap-2">
                             <Label htmlFor="confirmPassword">Konfirmasi Kata Sandi</Label>
                             <div className="relative">
@@ -151,14 +224,20 @@ const RegisterPage = () => {
                                     value={formData.confirmPassword}
                                     onChange={handleChange}
                                     required
-                                    minLength={8}
+                                    minLength={6}
                                     className="pl-10"
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
 
-                        <Button type="submit" className="w-full mt-2">
-                            Daftar Sekarang <ArrowRight className="ml-2 h-4 w-4" />
+                        <Button 
+                            type="submit" 
+                            className="w-full mt-2"
+                            disabled={isLoading || success}
+                        >
+                            {isLoading ? 'Memproses...' : 'Daftar Sekarang'} 
+                            {!isLoading && success === '' && <ArrowRight className="ml-2 h-4 w-4" />}
                         </Button>
                     </form>
                 </CardContent>

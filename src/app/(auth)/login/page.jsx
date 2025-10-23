@@ -1,5 +1,6 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,9 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Mail, Lock, LogIn, Chrome, Home } from 'lucide-react'; 
 import { signIn } from 'next-auth/react'; 
 import Link from 'next/link';
+import { authAPI } from '@/app/lib/api';
 
-
-// Komponen Separator (untuk memisahkan opsi login)
 const Separator = () => (
     <div className="relative my-4">
         <div className="absolute inset-0 flex items-center">
@@ -23,39 +23,50 @@ const Separator = () => (
     </div>
 );
 
-/**
- * Komponen Halaman Login
- * Menyediakan opsi login manual dan login dengan Google.
- */
 const LoginPage = () => {
-    const [formData, setFormData] = React.useState({
+    const router = useRouter();
+    const [formData, setFormData] = useState({
         email: '',
         password: '',
     });
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleChange = (e) => {
         const { id, value } = e.target;
         setFormData(prev => ({ ...prev, [id]: value }));
+        setError('');
     };
 
-   
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        // Logika login ke backend (menggunakan NextAuth.js credentials provider atau API)
-        if (formData.email && formData.password) {
-            console.log("Mencoba Login Manual:", formData);
-    
-            alert(`Mencoba login dengan ${formData.email}. (Login berhasil)`);
-        } else {
-            alert("Harap isi semua kolom.");
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const response = await authAPI.login(formData.email, formData.password);
+            
+            if (response.data.success) {
+                const { access_token, refresh_token, user } = response.data.data;
+                
+                // Simpan tokens ke localStorage
+                localStorage.setItem('access_token', access_token);
+                localStorage.setItem('refresh_token', refresh_token);
+                localStorage.setItem('user', JSON.stringify(user));
+                
+                // Redirect ke dashboard
+                router.push('/dashboard');
+            }
+        } catch (err) {
+            setError(err.response?.data?.error || 'Login gagal. Periksa email dan password Anda.');
+            console.error('Login error:', err);
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    // Handler untuk Login dengan Google (OAuth)
     const handleGoogleSignIn = () => {
-        // Panggil fungsi signIn dari NextAuth.js dengan provider 'google'
-        signIn('google', { callbackUrl: '/dashboard' }); 
+        signIn('google', { callbackUrl: '/dashboard' });
     };
 
     return (
@@ -76,7 +87,12 @@ const LoginPage = () => {
                 </CardHeader>
 
                 <CardContent className="grid gap-4">
-                    {/* Tombol Login dengan Google (OAuth) */}
+                    {error && (
+                        <div className="p-3 rounded-md bg-red-100 text-red-700 text-sm border border-red-300">
+                            {error}
+                        </div>
+                    )}
+
                     <Button 
                         variant="outline" 
                         onClick={handleGoogleSignIn} 
@@ -88,9 +104,7 @@ const LoginPage = () => {
 
                     <Separator />
 
-                    {/* Formulir Login Manual */}
                     <form onSubmit={handleSubmit} className="grid gap-4">
-                        {/* Input Email */}
                         <div className="grid gap-2">
                             <Label htmlFor="email">Email</Label>
                             <div className="relative">
@@ -103,15 +117,14 @@ const LoginPage = () => {
                                     onChange={handleChange}
                                     required
                                     className="pl-10"
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
 
-                        {/* Input Kata Sandi */}
                         <div className="grid gap-2">
                             <div className="flex items-center">
                                 <Label htmlFor="password">Kata Sandi</Label>
-                                {/* Opsi Lupa Kata Sandi */}
                                 <a
                                     href="/forgot-password"
                                     className="ml-auto inline-block text-sm underline text-primary hover:text-primary/80"
@@ -129,12 +142,18 @@ const LoginPage = () => {
                                     onChange={handleChange}
                                     required
                                     className="pl-10"
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
 
-                        <Button type="submit" className="w-full mt-2">
-                            Masuk <LogIn className="ml-2 h-4 w-4" />
+                        <Button 
+                            type="submit" 
+                            className="w-full mt-2"
+                            disabled={isLoading}
+                        >
+                            {isLoading ? 'Memproses...' : 'Masuk'} 
+                            {!isLoading && <LogIn className="ml-2 h-4 w-4" />}
                         </Button>
                     </form>
                 </CardContent>
