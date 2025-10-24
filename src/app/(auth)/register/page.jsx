@@ -9,6 +9,8 @@ import { User, Mail, Lock, ArrowRight, Chrome, Home } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { authAPI } from '@/lib/api'; // ✅ FIX: sebelumnya '@/app/lib/api'
+import { FcGoogle } from "react-icons/fc";
+
 
 const Separator = () => (
   <div className="relative">
@@ -91,7 +93,7 @@ const RegisterPage = () => {
   };
 
   const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl: '/dashboard' });
+    signIn('google', { callbackUrl: '/Screening' });
   };
 
     return (

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { useRouter } from 'next/navigation';
 
 // --- Data Pilihan Dropdown ---
 const experienceLevels = [ // Data baru untuk Lama Pengalaman Kerja
@@ -47,13 +48,15 @@ const ScreeningPage = () => {
             [field]: value,
         }));
     };
-
+const router = useRouter();
     const handleSubmit = (e) => {
         e.preventDefault();
         console.log('Data Screening Dikirim:', formData);
         // Di sini Anda bisa menambahkan logika POST API untuk mengirim data
-        alert('Data berhasil disimpan! Anda akan diarahkan ke dashboard terpersonalisasi.');
-    };
+        alert('Data berhasil disimpan! Anda akan diarahkan ke SKILLMATCH.');
+        router.push('/skill-match');
+};
+
 
     return (
         <div className="min-h-screen bg-yellow-50 py-16 text-gray-900 flex items-center justify-center">
