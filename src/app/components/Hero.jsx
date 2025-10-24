@@ -1,48 +1,86 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import Particles from "@/app/components/fx/Particles";
+import Wave from "@/app/components/fx/Wave";
 
 export default function Hero() {
   const bgRef = useRef(null);
   const contentRef = useRef(null);
 
+  // state untuk parallax
+  const scrollYRef = useRef(0);
+  const mouseRef = useRef({ mx: 0, my: 0 });
+  const rafRef = useRef(null);
+
   useEffect(() => {
-    let rafId;
+    const applyTransform = () => {
+      const y = scrollYRef.current || 0;
+      const { mx, my } = mouseRef.current;
+
+      // Parallax Y
+      const bgY = y * 0.12;
+      const contentY = -y * 0.06;
+
+      // Micro parallax dari mouse
+      const bgMX = mx * 8;
+      const bgMY = my * 6;
+
+      if (bgRef.current) {
+        bgRef.current.style.transform = `translate3d(${bgMX}px, ${bgY + bgMY}px, 0)`;
+      }
+      if (contentRef.current) {
+        contentRef.current.style.transform = `translate3d(0, ${contentY}px, 0)`;
+      }
+    };
 
     const onScroll = () => {
-      const y = window.scrollY || 0;
-      if (bgRef.current) bgRef.current.style.transform = `translate3d(0, ${y * 0.12}px, 0)`;
-      if (contentRef.current) contentRef.current.style.transform = `translate3d(0, ${-y * 0.06}px, 0)`;
+      scrollYRef.current = window.scrollY || 0;
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          applyTransform();
+        });
+      }
     };
 
     const onMouseMove = (e) => {
       const { innerWidth: w, innerHeight: h } = window;
-      const mx = (e.clientX - w / 2) / w;
-      const my = (e.clientY - h / 2) / h;
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        if (bgRef.current) {
-          bgRef.current.style.transform += ` translate(${mx * 8}px, ${my * 6}px)`;
-        }
-      });
+      mouseRef.current.mx = (e.clientX - w / 2) / w;
+      mouseRef.current.my = (e.clientY - h / 2) / h;
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          applyTransform();
+        });
+      }
     };
 
+    // init
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("mousemove", onMouseMove, { passive: true });
+
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("mousemove", onMouseMove);
-      cancelAnimationFrame(rafId);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border shadow-sm">
+    <section id="hero" className="relative overflow-hidden rounded-2xl border shadow-sm">
+      {/* Particles layer */}
+      <div className="absolute inset-0 -z-10">
+        <Particles />
+      </div>
+
+      {/* Background image + overlays */}
       <div
         ref={bgRef}
-        className="absolute inset-0 -z-10 bg-center bg-cover"
-        style={{ backgroundImage: `url('/hero.jpg')`, backgroundColor: "var(--bg)" }}
+        className="absolute inset-0 -z-10 bg-center bg-cover will-change-transform"
+        style={{ backgroundImage: `url('/hero.jpg')`, backgroundColor: "var(--background)" }}
+        aria-hidden
       />
       <div
         className="absolute inset-0 -z-10"
@@ -50,6 +88,7 @@ export default function Hero() {
           background:
             "linear-gradient(to top, rgba(255,253,244,0.95), rgba(255,253,244,0.80) 40%, rgba(255,253,244,0.55))",
         }}
+        aria-hidden
       />
       <div
         aria-hidden
@@ -60,38 +99,56 @@ export default function Hero() {
         }}
       />
 
-      <div ref={contentRef} className="px-6 sm:px-10 md:px-14 lg:px-20 py-16 sm:py-20 lg:py-24 text-center">
-        <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-[var(--accent-2)]">Perempuan di Tech</p>
+      {/* Content */}
+      <div
+        ref={contentRef}
+        className="px-6 sm:px-10 md:px-14 lg:px-20 py-16 sm:py-20 lg:py-24 text-center will-change-transform"
+      >
+        <p className="reveal text-xs sm:text-sm uppercase tracking-[0.2em]" style={{ color: "var(--accent-2)" }}>
+          Perempuan di Tech
+        </p>
 
-        <h1 className="mt-3 text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mx-auto max-w-4xl">
+        <h1
+          className="reveal mt-3 text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mx-auto max-w-4xl"
+          style={{ color: "var(--text)" }}
+        >
           Jika karier adalah musik, <br className="hidden sm:block" />
           apa <span style={{ color: "var(--primary)" }}>playlist-mu?</span>
         </h1>
 
-        <p className="mt-5 text-lg text-[color:var(--text)]/80 max-w-2xl mx-auto">
-          Arunika memadukan AI dan komunitas untuk memetakan jalur karier, membangun portofolio, dan menghubungkanmu
-          dengan mentor relevan.
+        <p
+          className="reveal mt-5 text-lg max-w-2xl mx-auto"
+          style={{ color: "color-mix(in oklab, var(--text) 80%, transparent)" }}
+        >
+          Arunika memadukan AI dan komunitas untuk memetakan jalur karier, membangun portofolio,
+          dan menghubungkanmu dengan mentor relevan.
         </p>
 
-        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          {/* ✅ arahkan ke /skill-match */}
+        <div className="reveal mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          {/* ✅ tombol utama ke /skill-match */}
           <Link
             href="/skill-match"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold text-white"
             style={{ background: "var(--primary)" }}
+            aria-label="Mulai Gratis - menuju halaman Skill Match"
           >
             Mulai Gratis
           </Link>
 
+          {/* ✅ tombol kedua scroll ke #keunggulan (pastikan section Keunggulan punya id="keunggulan") */}
           <a
-            href="#cara-kerja"
+            href="#keunggulan"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium border"
-            style={{ borderColor: "var(--accent-2)" }}
+            style={{ borderColor: "var(--accent-2)", color: "var(--text)" }}
+            aria-label="Lihat Cara Kerja - scroll ke bagian Keunggulan"
           >
             Lihat Cara Kerja
           </a>
         </div>
       </div>
+
+      {/* Wave parallax */}
+      {/* <Wave /> */}
     </section>
   );
 }

@@ -2,7 +2,7 @@
 
 function StatCard({ label, children }) {
   return (
-    <div className="ilcd-card">
+    <div className="ilcd-card reveal">
       <div className="p-4 md:p-5">
         <div className="text-sm text-neutral-500 mb-1">{label}</div>
         <div className="text-base md:text-lg font-semibold">{children}</div>
@@ -21,7 +21,7 @@ function Progress({ value }) {
 
 function MatchRow({ title, company, score }) {
   return (
-    <div className="flex flex-col gap-3 md:gap-4 py-6 border-t first:border-0" style={{ borderColor: "var(--border)" }}>
+    <div className="reveal flex flex-col gap-3 md:gap-4 py-6 border-t first:border-0" style={{ borderColor: "var(--border)" }}>
       <div className="flex items-center justify-between gap-4">
         <div>
           <h4 className="text-base md:text-lg font-semibold">{title}</h4>
@@ -48,8 +48,8 @@ function MatchRow({ title, company, score }) {
 
 export default function IntelligentDashboard() {
   return (
-    <section className="mt-16">
-      <div className="text-center max-w-3xl mx-auto">
+    <section id="unik" className="mt-16">
+      <div className="text-center max-w-3xl mx-auto reveal">
         <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Intelligent Lab Career Dashboard</h2>
         <p className="mt-3 text-neutral-600">Dapatkan Informasi Detail Mengenai Rekomendasi Pengembangan Karirmu.</p>
       </div>
@@ -68,18 +68,10 @@ export default function IntelligentDashboard() {
 
           <hr className="my-8" style={{ borderColor: "var(--border)" }} />
 
-          <h3 className="text-xl md:text-2xl font-bold">Job Match</h3>
+          <h3 className="text-xl md:text-2xl font-bold reveal">Job Match</h3>
 
-          <MatchRow
-            title="Product Manager"
-            company='Tech Startup "Inovasi Digital" - Jakarta'
-            score={92}
-          />
-          <MatchRow
-            title="UI/UX Researcher"
-            company='Creative Agency "Visuara" - Bandung'
-            score={85}
-          />
+          <MatchRow title="Product Manager" company='Tech Startup "Inovasi Digital" - Jakarta' score={92} />
+          <MatchRow title="UI/UX Researcher" company='Creative Agency "Visuara" - Bandung' score={85} />
         </div>
       </div>
     </section>

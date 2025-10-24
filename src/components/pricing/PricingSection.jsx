@@ -5,11 +5,11 @@ import { plans } from "@/lib/pricing";
 
 export default function PricingSection() {
   return (
-    <section className="section">
+    <section id="keanggotaan" className="section">
       <div className="pricing-container p-2">
         <div className="pricing-inner">
           <div className="grid lg:grid-cols-2 gap-10 p-8 sm:p-10">
-            <div className="max-w-xl">
+            <div className="max-w-xl reveal">
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
                 Buka Level Baru Dalam Karirmu
               </h2>
@@ -20,8 +20,10 @@ export default function PricingSection() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-6">
-              {plans.map((p) => (
-                <PlanCard key={p.id} {...p} />
+              {plans.map((p, i) => (
+                <div key={p.id} className="reveal">
+                  <PlanCard {...p} />
+                </div>
               ))}
             </div>
           </div>
