@@ -1,14 +1,21 @@
 "use client";
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, LogIn, Chrome, Home } from 'lucide-react'; 
-import { signIn } from 'next-auth/react'; 
-import Link from 'next/link';
-import { authAPI } from '@/lib/api'; 
+import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
+import { signIn } from "next-auth/react";
+import Link from "next/link";
+import { authAPI } from "@/lib/api";
 
 const Separator = () => (
   <div className="relative my-4">
@@ -25,44 +32,43 @@ const Separator = () => (
 
 const LoginPage = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
     const { id, value } = e.target;
-    setFormData(prev => ({ ...prev, [id]: value }));
-    setError('');
+    setFormData((prev) => ({ ...prev, [id]: value }));
+    setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
       const response = await authAPI.login(formData.email, formData.password);
       if (response?.data?.success) {
         const { access_token, refresh_token, user } = response.data.data;
 
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', refresh_token);
-        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem("access_token", access_token);
+        localStorage.setItem("refresh_token", refresh_token);
+        localStorage.setItem("user", JSON.stringify(user));
 
-        router.push('/dashboard');
+        router.push("/dashboard");
       } else {
-        setError('Login gagal. Periksa email dan password Anda.');
+        setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
     } catch (err) {
-      setError(err?.response?.data?.error || 'Login gagal. Periksa email dan password Anda.');
-      console.error('Login error:', err);
+      setError("Terjadi kesalahan saat login. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl: '/dashboard' });
+    signIn("google", { callbackUrl: "/dashboard" });
   };
 
   return (
@@ -147,7 +153,7 @@ const LoginPage = () => {
             </div>
 
             <Button type="submit" className="w-full mt-2" disabled={isLoading}>
-              {isLoading ? 'Memproses...' : 'Masuk'}
+              {isLoading ? "Memproses..." : "Masuk"}
               {!isLoading && <LogIn className="ml-2 h-4 w-4" />}
             </Button>
           </form>
@@ -156,7 +162,10 @@ const LoginPage = () => {
         <CardFooter className="flex flex-col gap-4 pt-0">
           <p className="text-sm text-center text-gray-500">
             Belum punya akun?
-            <a href="/register" className="ml-1 font-medium text-primary hover:underline">
+            <a
+              href="/register"
+              className="ml-1 font-medium text-primary hover:underline"
+            >
               Daftar di sini
             </a>
           </p>
