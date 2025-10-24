@@ -77,10 +77,10 @@ const RegisterPage = () => {
                 localStorage.setItem('refresh_token', refresh_token);
                 localStorage.setItem('user', JSON.stringify(user));
 
-                setSuccess('Pendaftaran berhasil! Anda akan diarahkan ke dashboard...');
+                setSuccess('Pendaftaran berhasil! Anda akan diarahkan ke Screening...');
                 
                 setTimeout(() => {
-                    router.push('/dashboard');
+                    router.push('/Screening');
                 }, 2000);
             }
         } catch (err) {
