@@ -1,11 +1,11 @@
 import React from "react";
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
-import Hero from "./components/Hero";
-import IntelligentDashboard from "@/app/components/IntelligentDashboard";
-import PricingSection from "../components/pricing/PricingSection";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import Hero from "@/components/hero/Hero";
+import IntelligentDashboard from "@/components/hero/IntelligentDashboard";
+import PricingSection from "@/components/pricing/PricingSection";
 import AboutUsSection from "@/components/about/AboutUsSection";
-import FeatureSection from "./components/FeatureSection";
+import FeatureSection from "@/components/feature/FeatureSection";
 
 export default function HomePage() {
   return (

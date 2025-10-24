@@ -1,14 +1,15 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import Particles from "@/app/components/fx/Particles";
-import Wave from "@/app/components/fx/Wave";
+// ✅ perbaiki path ini (sesuai struktur baru)
+import Particles from "@/components/fx/Particles";
+// (opsional) kalau belum dipakai, hapus import Wave
+// import Wave from "@/components/fx/Wave";
 
 export default function Hero() {
   const bgRef = useRef(null);
   const contentRef = useRef(null);
 
-  // state untuk parallax
   const scrollYRef = useRef(0);
   const mouseRef = useRef({ mx: 0, my: 0 });
   const rafRef = useRef(null);
@@ -18,11 +19,9 @@ export default function Hero() {
       const y = scrollYRef.current || 0;
       const { mx, my } = mouseRef.current;
 
-      // Parallax Y
       const bgY = y * 0.12;
       const contentY = -y * 0.06;
 
-      // Micro parallax dari mouse
       const bgMX = mx * 8;
       const bgMY = my * 6;
 
@@ -56,7 +55,6 @@ export default function Hero() {
       }
     };
 
-    // init
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("mousemove", onMouseMove, { passive: true });
@@ -125,29 +123,27 @@ export default function Hero() {
         </p>
 
         <div className="reveal mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          {/* ✅ tombol utama ke /skill-match */}
+          {/* ke /skill-match */}
           <Link
             href="/skill-match"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold text-white"
             style={{ background: "var(--primary)" }}
-            aria-label="Mulai Gratis - menuju halaman Skill Match"
           >
             Mulai Gratis
           </Link>
 
-          {/* ✅ tombol kedua scroll ke #keunggulan (pastikan section Keunggulan punya id="keunggulan") */}
+          {/* scroll ke #keunggulan */}
           <a
             href="#keunggulan"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium border"
             style={{ borderColor: "var(--accent-2)", color: "var(--text)" }}
-            aria-label="Lihat Cara Kerja - scroll ke bagian Keunggulan"
           >
             Lihat Cara Kerja
           </a>
         </div>
       </div>
 
-      {/* Wave parallax */}
+      {/* (opsional) aktifkan lagi kalau sudah siap */}
       {/* <Wave /> */}
     </section>
   );
