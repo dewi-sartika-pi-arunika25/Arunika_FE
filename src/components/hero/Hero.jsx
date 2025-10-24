@@ -125,7 +125,7 @@ export default function Hero() {
         <div className="reveal mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           {/* ke /skill-match */}
           <Link
-            href="/skill-match"
+            href="/register"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold text-white"
             style={{ background: "var(--primary)" }}
           >
