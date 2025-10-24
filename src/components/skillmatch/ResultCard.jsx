@@ -94,7 +94,7 @@ export default function ResultCard({ score, strengths, onClose }) {
         {/* Hanya CTA utama, center */}
         <div className="flex justify-center">
           <a
-            href="/lab-career"
+            href="/personalized"
             className="inline-flex items-center justify-center rounded-xl px-5 py-3 text-white font-semibold shadow-md hover:opacity-95 transition"
             style={{
               background:
