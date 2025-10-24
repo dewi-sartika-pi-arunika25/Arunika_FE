@@ -73,6 +73,23 @@ export const usersAPI = {
   delete: (id) => api.delete(`/users/${id}`),
 };
 
+// ============ SKILL QUESTIONS ENDPOINTS ============
+
+export const skillQuestionsAPI = {
+  getAll: (page = 1, limit = 12, roleCategory = null) => {
+    let url = `/skill-questions?page=${page}&limit=${limit}`;
+    if (roleCategory) url += `&role_category=${encodeURIComponent(roleCategory)}`;
+    return api.get(url);
+  },
+  getByRole: (roleCategory) => 
+    api.get(`/skill-questions?role_category=${encodeURIComponent(roleCategory)}`),
+  getCategories: () => api.get('/skill-questions/categories'),
+  getById: (id) => api.get(`/skill-questions/${id}`),
+  create: (data) => api.post('/skill-questions', data),
+  update: (id, data) => api.put(`/skill-questions/${id}`, data),
+  delete: (id) => api.delete(`/skill-questions/${id}`),
+};
+
 // ============ PEKERJAAN ENDPOINTS ============
 
 export const pekerjaanAPI = {
