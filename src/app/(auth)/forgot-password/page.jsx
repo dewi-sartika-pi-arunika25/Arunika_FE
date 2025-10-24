@@ -33,7 +33,7 @@ const ForgotPasswordPage = () => {
 
     if (isSubmitted) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+            <div className="flex min-h-screen items-center justify-center bg-background text-foreground p-4">
                 <Card className="w-full max-w-sm shadow-2xl text-center">
                     <CardHeader>
                         <CardTitle className="text-2xl">Cek Email Anda 📧</CardTitle>
@@ -54,7 +54,7 @@ const ForgotPasswordPage = () => {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="flex min-h-screen items-center justify-center bg-background text-foreground p-4">
             <Card className="w-full max-w-sm shadow-2xl">
                 <CardHeader className="space-y-1 text-center">
                     <CardTitle className="text-2xl font-bold flex items-center justify-center">

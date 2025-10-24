@@ -9,6 +9,8 @@ import { User, Mail, Lock, ArrowRight, Chrome, Home } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { authAPI } from '@/app/lib/api';
+import { FcGoogle } from "react-icons/fc";
+
 
 const Separator = () => (
     <div className="relative">
@@ -96,7 +98,7 @@ const RegisterPage = () => {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="flex min-h-screen items-center justify-center bg-background text-foreground p-4">
             <Card className="w-full max-w-md shadow-xl">
                 <CardHeader className="space-y-1 text-center">
                     <div className="mb-4">
@@ -125,13 +127,13 @@ const RegisterPage = () => {
                         </div>
                     )}
 
-                    <Button 
-                        variant="outline" 
-                        onClick={handleGoogleSignIn} 
-                        className="w-full bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                        <Chrome className="mr-2 h-4 w-4" />
-                        Daftar dengan Google
+                    <Button
+                    variant="outline"
+                    onClick={handleGoogleSignIn}
+                    className="w-full bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                    <FcGoogle className="mr-2 h-5 w-5" />
+                    Daftar dengan Google
                     </Button>
 
                     <Separator />
