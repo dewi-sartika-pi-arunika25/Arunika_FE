@@ -69,7 +69,7 @@ const ResetPasswordPage = () => {
   // Jika reset berhasil
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground p-4">
         <Card className="w-full max-w-sm text-center shadow-2xl">
           <CardHeader className="space-y-4">
             <div className="flex justify-center">
@@ -95,7 +95,7 @@ const ResetPasswordPage = () => {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background text-foreground p-4">
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold">Atur Ulang Kata Sandi</CardTitle>

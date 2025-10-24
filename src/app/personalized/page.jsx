@@ -1,6 +1,6 @@
 import React from 'react';
 // Import Ikon dari Lucide (untuk ikon umum)
-import { Briefcase, DollarSign, Target, Zap, ChevronDown, Search, Edit, BookOpen, Link, Bell } from 'lucide-react'; 
+import { Briefcase, DollarSign, Target, Zap, Search, BookOpen, Bell, Brain } from 'lucide-react'; 
 // Import Ikon Brand dari React-Icons (asumsi sudah diinstal)
 import { FaLinkedinIn, FaRegBuilding } from 'react-icons/fa'; 
 import { RiMoneyDollarBoxLine } from 'react-icons/ri';
@@ -59,6 +59,16 @@ const JobPortalIconLink = ({ source, url }) => {
     let name;
 
     switch (source) {
+      case 'Skilvul':
+      iconComponent = (
+        <img
+          src="https://skilvul.com/favicon.ico"
+          alt="Skilvul"
+          className="w-5 h-5 rounded object-contain hover:scale-110 transition-transform"
+        />
+      );
+      name = 'Skilvul';
+      break;
         case 'Linkedin':
             iconComponent = <FaLinkedinIn size={iconSize} />;
             iconClass = 'text-blue-700 bg-blue-100 hover:bg-blue-200';
@@ -110,52 +120,62 @@ const JobMatchCard = ({ jobMatches }) => {
             <CardContent className="px-6 pb-6 space-y-4">
             
             {jobMatches.map((job, index) => {
-                const isTopMatch = job.match === maxMatch;
-                    
-                return (
-                    <div key={index} className="flex items-center justify-between border-b border-yellow-100 pb-4 last:border-b-0 last:pb-0">
-                        <div className="flex items-start space-x-4">
-                            <div className="p-3 rounded-full bg-orange-100 text-orange-600">
-                                <Briefcase className="h-5 w-5" />
-                            </div>
-                            <div>
-                                {/* Nama Pekerjaan dengan Highlight Font Besar */}
-                                <p className={`font-semibold ${
-                                    isTopMatch 
-                                        ? 'text-xl text-orange-600' // Font lebih besar
-                                        : 'text-lg text-gray-900'
-                                }`}>
-                                    {job.role}
-                                </p>
-                                
-                                <div className="mt-1 flex items-center space-x-2">
-                                    {/* Skala Saran AI (Match) sebagai Badge */}
-                                    <Badge className="bg-yellow-500 text-gray-900 text-xs font-bold p-1">
-                                        {job.match}% Match AI
-                                    </Badge>
+  const isTopMatch = job.match === maxMatch;
+  
+  return (
+    <div
+      key={index}
+      className="flex flex-col border-b border-yellow-100 pb-4 last:border-b-0 last:pb-0"
+    >
+      <div className="flex items-start justify-between mb-2">
+        {/* KIRI: Info Role */}
+        <div className="flex items-start space-x-4">
+          <div className="p-3 rounded-full bg-orange-100 text-orange-600">
+            <Briefcase className="h-5 w-5" />
+          </div>
+          <div>
+            <p
+              className={`font-semibold ${
+                isTopMatch
+                  ? 'text-xl text-orange-600'
+                  : 'text-lg text-gray-900'
+              }`}
+            >
+              {job.role}
+            </p>
+            <Badge className="bg-orange-200 text-orange-800 font-bold hover:bg-orange-300">
+              Role Fit: {job.badge}
+            </Badge>
+          </div>
+        </div>
 
-                                    {/* Role Fit Badge (Istilah sudah benar) */}
-                                    <Badge className="bg-orange-200 text-orange-800 font-bold hover:bg-orange-300">
-                                        Role Fit: {job.badge}
-                                    </Badge>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* ICON PORTAL AKSI SEJAJAR */}
-                        <div className="flex space-x-2">
-                            {availablePortals.map(source => (
-                                <JobPortalIconLink 
-                                    key={source}
-                                    source={source}
-                                    // Menggunakan URL dummy yang berbeda per portal/job jika datanya tersedia
-                                    url={job.url || "#"} 
-                                />
-                            ))}
-                        </div>
-                    </div>
-                );
-            })}
+        {/* KANAN: Portal Job */}
+        <div className="flex space-x-2">
+          {availablePortals.map((source) => (
+            <JobPortalIconLink
+              key={source}
+              source={source}
+              url={job.url || '#'}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Progress Bar + Persentase */}
+      <div className="mt-1">
+        <div className="flex justify-between text-xs font-medium text-gray-600 mb-1">
+          <span>Analisis Kecocokan Berdasarkan AI</span>
+          <span className="text-yellow-600 font-semibold">{job.match}%</span>
+        </div>
+        <Progress
+          value={job.match}
+          className="h-2 bg-yellow-400 [&>div]:bg-yellow-600"
+        />
+      </div>
+    </div>
+  );
+})}
+
             </CardContent>
         </Card>
     );
@@ -172,7 +192,7 @@ const AICareerAnalysisCard = ({ education }) => (
     <CardContent className="px-6 pb-6 space-y-4">
         <div className="flex items-start space-x-4">
             <div className="p-3 rounded-full bg-yellow-200 text-yellow-600">
-                <Zap className="h-5 w-5" />
+                <Brain className="h-7 w-7" />
             </div>
             <div>
                 <p className="text-lg font-semibold text-gray-900">{education.title}</p>
@@ -227,10 +247,14 @@ const Header = () => (
       
       {/* KIRI: Logo & Search Bar */}
       <div className="flex items-center space-x-4">
-        <div className="text-2xl font-bold text-orange-500 flex items-center space-x-2">
-            <div className="h-6 w-6 bg-orange-500 rounded-full flex items-center justify-center text-white font-medium text-sm">A</div>
-            <span>Arunika</span>
-        </div>
+       <div className="flex items-center space-x-2">
+  <img
+    src="/arunikalogo.svg"
+    alt="Logo Arunika"
+    className="relative h-12 w-32"
+  />
+</div>
+
         
         <div className="relative hidden lg:block ml-8">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -334,7 +358,7 @@ const Personalized = () => {
                       <span>{gap.name}</span>
                       <span className="font-semibold text-red-600">Match {gap.match}%</span>
                   </div>
-                  <Progress value={gap.match} className="h-2 bg-red-100" indicatorClassName="bg-red-500" />
+                  <Progress value={gap.match} className="h-2 bg-red-100 [&>div]:bg-orange-500" />
                 </div>
               ))}
             </CardContent>
