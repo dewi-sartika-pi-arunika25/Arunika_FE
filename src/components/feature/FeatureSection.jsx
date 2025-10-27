@@ -1,148 +1,146 @@
-// src/app/components/FeatureSection.jsx
+"use client";
+
+import Image from "next/image";
+import { motion } from "framer-motion";
 import { Brain, Map, Briefcase } from "lucide-react";
 
-const iconsMap = {
-  "Personalized AI": Brain,
-  "Career Readiness": Map,
-  "Career Connector": Briefcase,
+/* ====== DATA ======
+   Bisa pakai imageSrc (letakkan di /public) ATAU iconName lucide.
+   Kalau imageSrc ada, kita tampilkan gambar; kalau tidak, pakai ikon gradien.
+*/
+const iconsMap = { Brain, Map, Briefcase };
+
+const featureRows = [
+  {
+    title: "Personalized AI",
+    description:
+      "Analisis mendalam yang unik untukmu—bukan hasil generik. Asesmen terarah yang memetakan jalur karier sesuai karakter dan potensimu.",
+    tag: "AI Powered",
+    // imageSrc: "/f1.png",   // ← aktifkan kalau punya gambar
+    iconName: "Brain",
+  },
+  {
+    title: "Career Readiness",
+    description:
+      "Kenali kekuatan & area pengembangan. Dapatkan rekomendasi kegiatan nyata untuk membangun bukti kerja (portfolio) yang relevan.",
+    tag: "Roadmap",
+    // imageSrc: "/f2.png",
+    iconName: "Map",
+  },
+  {
+    title: "Career Connector",
+    description:
+      "Terhubung dengan mentor & profesional industri. Dapatkan wawasan langsung untuk akselerasi kariermu.",
+    tag: "Networking",
+    // imageSrc: "/f3.png",
+    iconName: "Briefcase",
+  },
+];
+
+/* ====== VARIANTS (animasi) ====== */
+const fly = (dir) => ({
+  hidden: { opacity: 0, x: dir === "left" ? -40 : 40, filter: "blur(2px)" },
+  show: {
+    opacity: 1, x: 0, filter: "blur(0px)",
+    transition: { type: "spring", stiffness: 260, damping: 28 }
+  },
+});
+const fadeUp = {
+  hidden: { opacity: 0, y: 12, filter: "blur(2px)" },
+  show: { opacity: 1, y: 0, filter: "blur(0)", transition: { duration: .35 } },
 };
 
-function Card({ title, description, tag, iconName }) {
-  const Icon = iconsMap[iconName];
-
+function Visual({ imageSrc, iconName }) {
+  const Icon = iconName ? iconsMap[iconName] : null;
   return (
-    <div
-      className="
-        relative rounded-3xl border shadow-sm backdrop-blur-xl
-        transition-transform duration-300 will-change-transform
-        hover:-translate-y-0.5 hover:scale-[1.01]
-      "
-      style={{
-        background: "color-mix(in oklab, var(--background) 86%, transparent)",
-        borderColor: "var(--border)",
-      }}
-    >
-      {/* header ikon + tag */}
-      <div className="flex items-start justify-between p-6">
-        <div
-          className="inline-flex items-center justify-center rounded-xl p-3 shadow-sm"
-          style={{
-            background:
-              "linear-gradient(135deg, color-mix(in oklab, var(--primary) 85%, white) 0%, color-mix(in oklab, var(--primary) 60%, transparent) 100%)",
-          }}
-        >
-          {Icon && <Icon className="h-7 w-7" style={{ color: "white" }} />}
+    <div className="relative w-full aspect-[16/10] sm:aspect-[5/3] rounded-2xl overflow-hidden border shadow-sm"
+         style={{ borderColor: "var(--border)", background: "color-mix(in oklab, var(--background) 88%, transparent)" }}>
+      {imageSrc ? (
+        <Image src={imageSrc} alt="" fill className="object-cover" />
+      ) : (
+        <div className="h-full w-full grid place-items-center">
+          <div className="rounded-2xl p-5 shadow-sm"
+               style={{ background: "linear-gradient(135deg, color-mix(in oklab, var(--primary) 85%, white), color-mix(in oklab, var(--primary) 55%, transparent))" }}>
+            {Icon && <Icon className="h-14 w-14" style={{ color: "white" }} />}
+          </div>
         </div>
+      )}
 
-        <span
-          className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border"
-          style={{
-            color: "color-mix(in oklab, var(--text) 86%, transparent)",
-            borderColor: "color-mix(in oklab, var(--accent-2) 50%, transparent)",
-            background: "color-mix(in oklab, var(--accent-3) 22%, transparent)",
-          }}
-        >
-          {tag}
-        </span>
-      </div>
-
-      {/* konten */}
-      <div className="px-6 pb-6">
-        <h3
-          className="text-xl sm:text-2xl font-bold mb-2"
-          style={{ color: "var(--text)" }}
-        >
-          {title}
-        </h3>
-        <p
-          className="text-sm sm:text-base leading-relaxed"
-          style={{ color: "color-mix(in oklab, var(--text) 78%, transparent)" }}
-        >
-          {description}
-        </p>
-      </div>
-
-      {/* aksen glow halus */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-6 -bottom-6 h-24 w-24 rounded-full blur-2xl"
-        style={{ background: "color-mix(in oklab, var(--primary) 30%, transparent)" }}
-      />
+      {/* subtle glow */}
+      <div aria-hidden className="absolute -right-8 -bottom-10 h-28 w-28 rounded-full blur-2xl"
+           style={{ background: "color-mix(in oklab, var(--primary) 30%, transparent)" }} />
     </div>
   );
 }
 
 export default function FeatureSection() {
-  const featureCards = [
-    {
-      title: "Personalized AI",
-      description:
-        "Dapatkan analisis mendalam yang unik untukmu, bukan hasil generik. Lakukan asesmen dan temukan jalur karier yang selaras denganmu.",
-      tag: "AI Powered",
-      iconName: "Personalized AI",
-    },
-    {
-      title: "Career Readiness",
-      description:
-        "Ketahui kekuatan, area pengembangan, hingga jalur karier yang sesuai untukmu. Dapatkan rekomendasi pengembangan diri yang praktis.",
-      tag: "Roadmap",
-      iconName: "Career Readiness",
-    },
-    {
-      title: "Career Connector",
-      description:
-        "Hubungkan dirimu dengan mentor dan industri impianmu. Dapatkan wawasan langsung dari para profesional berpengalaman.",
-      tag: "Networking",
-      iconName: "Career Connector",
-    },
-  ];
-
   return (
-    // PENTING: id harus sama dengan target di navbar
     <section id="keunggulan" className="py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4">
+
         {/* header */}
-        <div className="reveal text-center mx-auto max-w-3xl">
-          <p
+        <motion.div
+          initial="hidden" whileInView="show" viewport={{ once: false, amount: 0.4 }}
+          className="text-center mx-auto max-w-3xl"
+        >
+          <motion.p variants={fadeUp}
             className="text-xs uppercase tracking-[0.18em] mb-2"
-            style={{ color: "var(--accent-2)" }}
-          >
+            style={{ color: "var(--accent-2)" }}>
             Keunggulan
-          </p>
-          <h2
+          </motion.p>
+          <motion.h2 variants={fadeUp}
             className="text-3xl sm:text-4xl font-bold leading-tight"
-            style={{ color: "var(--text)" }}
-          >
+            style={{ color: "var(--text)" }}>
             Bukan Sekadar Tes — Ini Strategi Karier Personalmu
-          </h2>
-          <p
+          </motion.h2>
+          <motion.p variants={fadeUp}
             className="mt-3 text-base"
-            style={{ color: "color-mix(in oklab, var(--text) 75%, transparent)" }}
-          >
-            Arunika dirancang untuk memberi kejelasan. Lihat bagaimana kami
-            membantumu melangkah lebih tepat.
-          </p>
-        </div>
+            style={{ color: "color-mix(in oklab, var(--text) 75%, transparent)" }}>
+            Arunika dirancang untuk memberi kejelasan. Scroll dan lihat bagaimana kami membantumu melangkah lebih tepat.
+          </motion.p>
+        </motion.div>
 
-        {/* grid cards */}
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-          {featureCards.map((card, i) => (
-            <div key={i} className="reveal">
-              <Card {...card} />
-            </div>
-          ))}
-        </div>
+        {/* rows bergantian (image kiri/kanan) */}
+        <div className="mt-12 space-y-12 sm:space-y-16">
+          {featureRows.map((f, i) => {
+            const reverse = i % 2 === 1 ? "md:flex-row-reverse" : "";
+            return (
+              <motion.div
+                key={f.title}
+                className={`reveal flex flex-col md:flex-row ${reverse} items-center gap-6 md:gap-10`}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: false, amount: 0.35, margin: "-10% 0px -10% 0px" }}
+              >
+                {/* visual */}
+                <motion.div className="md:w-1/2" variants={fly(i % 2 === 1 ? "right" : "left")}>
+                  <Visual imageSrc={f.imageSrc} iconName={f.iconName} />
+                </motion.div>
 
-        <div className="mt-10 flex justify-end">
-          <div
-            className="reveal rounded-xl border px-4 py-3 text-xs"
-            style={{
-              color: "color-mix(in oklab, var(--text) 70%, transparent)",
-              borderColor: "var(--border)",
-              background: "color-mix(in oklab, var(--background) 90%, transparent)",
-            }}
-          >
-          </div>
+                {/* copy */}
+                <motion.div className="md:w-1/2" variants={fly(i % 2 === 1 ? "left" : "right")}>
+                  <div className="max-w-xl">
+                    <span
+                      className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border mb-3"
+                      style={{
+                        color: "color-mix(in oklab, var(--text) 86%, transparent)",
+                        borderColor: "color-mix(in oklab, var(--accent-2) 50%, transparent)",
+                        background: "color-mix(in oklab, var(--accent-3) 18%, transparent)",
+                      }}
+                    >
+                      {f.tag}
+                    </span>
+
+                    <h3 className="text-2xl font-bold mb-2" style={{ color: "var(--text)" }}>
+                      {f.title}
+                    </h3>
+
+                    <p className="text-[color:var(--text)]/80 leading-relaxed">{f.description}</p>
+                  </div>
+                </motion.div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>
