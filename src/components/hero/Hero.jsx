@@ -1,10 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-// ✅ perbaiki path ini (sesuai struktur baru)
 import Particles from "@/components/fx/Particles";
-// (opsional) kalau belum dipakai, hapus import Wave
-// import Wave from "@/components/fx/Wave";
+
 
 export default function Hero() {
   const bgRef = useRef(null);
@@ -68,12 +66,10 @@ export default function Hero() {
 
   return (
     <section id="hero" className="relative overflow-hidden rounded-2xl border shadow-sm">
-      {/* Particles layer */}
       <div className="absolute inset-0 -z-10">
         <Particles />
       </div>
 
-      {/* Background image + overlays */}
       <div
         ref={bgRef}
         className="absolute inset-0 -z-10 bg-center bg-cover will-change-transform"
@@ -97,7 +93,6 @@ export default function Hero() {
         }}
       />
 
-      {/* Content */}
       <div
         ref={contentRef}
         className="px-6 sm:px-10 md:px-14 lg:px-20 py-16 sm:py-20 lg:py-24 text-center will-change-transform"
@@ -123,7 +118,6 @@ export default function Hero() {
         </p>
 
         <div className="reveal mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          {/* ke /skill-match */}
           <Link
             href="/register"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold text-white"
@@ -132,7 +126,6 @@ export default function Hero() {
             Mulai Gratis
           </Link>
 
-          {/* scroll ke #keunggulan */}
           <a
             href="#keunggulan"
             className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium border"
@@ -143,7 +136,6 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* (opsional) aktifkan lagi kalau sudah siap */}
       {/* <Wave /> */}
     </section>
   );
