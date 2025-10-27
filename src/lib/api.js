@@ -104,6 +104,17 @@ export const pekerjaanAPI = {
   delete: (id) => api.delete(`/pekerjaan/${id}`),
 };
 
+// ============ JOB SKILLS ENDPOINTS ============
+
+export const jobSkillsAPI = {
+  getByRoleAndLevel: (role, level) => 
+    api.get(`/pekerjaan/skills/${role}/${level}`),
+  getByRole: (role) => 
+    api.get(`/pekerjaan/skills/${role}/all`),
+  getAll: () => 
+    api.get('/pekerjaan/skills'),
+};
+
 // ============ SKILLUP ENDPOINTS ============
 
 export const skillupAPI = {
