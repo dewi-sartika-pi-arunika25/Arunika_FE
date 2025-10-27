@@ -181,7 +181,6 @@
   background: linear-gradient(90deg, var(--accent-2), var(--primary));
 }
 
-/* Glassmorphism halus */
 .glass {
   backdrop-filter: blur(16px);
   background: color-mix(in oklab, var(--background) 70%, transparent);
@@ -190,7 +189,5 @@
   box-shadow: 0 10px 30px rgba(0,0,0,.08);
 }
 
-/* Scroll-reveal */
 .reveal-hide { opacity: 0; transform: translateY(12px) scale(.98); }
 .reveal-in { opacity: 1; transform: translateY(0) scale(1); transition: opacity .6s ease var(--reveal-delay, 0ms), transform .6s ease var(--reveal-delay, 0ms); }
-
