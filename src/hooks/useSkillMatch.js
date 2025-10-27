@@ -130,8 +130,22 @@ export function useSkillMatch(roleCategory) {
         throw new Error('Gagal menyimpan hasil quiz: ' + (personalizedRes.data.error || 'Unknown error'));
       }
 
-      const recId = personalizedRes.data.data.personalized.rec_id;
+      // Extract rec_id dengan safe handling berbagai response structure
+      let recId = null;
+      
+      if (personalizedRes.data.data?.personalized?.rec_id) {
+        recId = personalizedRes.data.data.personalized.rec_id;
+      } else if (personalizedRes.data.data?.rec_id) {
+        recId = personalizedRes.data.data.rec_id;
+      } else if (personalizedRes.data.personalized?.rec_id) {
+        recId = personalizedRes.data.personalized.rec_id;
+      }
+
       console.log('RecId created:', recId);
+
+      if (!recId) {
+        throw new Error('rec_id tidak ditemukan di response: ' + JSON.stringify(personalizedRes.data));
+      }
 
       // Store result di sessionStorage untuk reference
       if (typeof window !== 'undefined') {
@@ -150,14 +164,14 @@ export function useSkillMatch(roleCategory) {
           console.error('Error creating job recommendations:', err);
         });
 
-      // Wait a bit then redirect to personalized dashboard
-      console.log('Redirecting to personalized with rec_id:', recId);
+      // Redirect to personalized dashboard
+      console.log('✅ Redirecting to personalized with rec_id:', recId);
       setTimeout(() => {
         router.push(`/personalized?rec_id=${recId}`);
       }, 500);
 
     } catch (err) {
-      console.error('Submit error:', err);
+      console.error('❌ Submit error:', err);
       setError(err.message || 'Terjadi kesalahan saat submit');
       setSubmitting(false);
     }
