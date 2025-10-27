@@ -52,11 +52,18 @@ const LoginPage = () => {
       if (response?.data?.success) {
         const { access_token, refresh_token, user } = response.data.data;
 
+        // Simpan tokens & user data
         localStorage.setItem("access_token", access_token);
         localStorage.setItem("refresh_token", refresh_token);
         localStorage.setItem("user", JSON.stringify(user));
+        
+        // ✅ TAMBAH: Simpan user_id
+        localStorage.setItem("user_id", user.id);
+        
+        console.log('Login success, saved user_id:', user.id);
 
-        router.push("/dashboard");
+        // ✅ UBAH: Redirect ke Screening dulu, bukan dashboard
+        router.push("/Screening");
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
@@ -68,7 +75,7 @@ const LoginPage = () => {
   };
 
   const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/dashboard" });
+    signIn("google", { callbackUrl: "/Screening" });
   };
 
   return (
