@@ -2,7 +2,7 @@ import React from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import Hero from "@/components/hero/Hero";
-import IntelligentDashboard from "@/components/hero/IntelligentDashboard";
+import IntelligentDashboard from "@/components/dashboard/IntelligentDashboard";
 import PricingSection from "@/components/pricing/PricingSection";
 import AboutUsSection from "@/components/about/AboutUsSection";
 import FeatureSection from "@/components/feature/FeatureSection";

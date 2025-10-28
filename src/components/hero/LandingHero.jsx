@@ -23,7 +23,7 @@ export default function LandingHero() {
         subtitle="Temukan peran yang paling cocok denganmu. Arunika menganalisis keterampilan, kekuatan, dan kelemahanmu untuk menyusun jalur karier yang relevan. Lengkap dengan rekomendasi lowongan kerja yang sesuai."
         rightSlot={null} 
         ctas={[
-          { label: "Mulai Gratis", href: "/signup", variant: "primary" },
+          { label: "Mulai Gratis", href: "/register", variant: "primary" },
           { label: "Lihat Dashboard", variant: "ghost", onClick: () => setOpen(true) }, // buka popup
         ]}
       />

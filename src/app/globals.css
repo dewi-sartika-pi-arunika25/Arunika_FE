@@ -26,7 +26,7 @@
 :root {
   --radius: 0.625rem;
 
-  --background: #FFFDF4;
+  --background: #FFFFFF;
   --foreground: #2B2B2B;
 
   --bg: var(--background);
