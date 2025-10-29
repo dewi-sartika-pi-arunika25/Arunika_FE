@@ -16,6 +16,7 @@ import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
+import { FcGoogle } from "react-icons/fc";
 
 const Separator = () => (
   <div className="relative my-4">
@@ -62,8 +63,8 @@ const LoginPage = () => {
         
         console.log('Login success, saved user_id:', user.id);
 
-        // ✅ UBAH: Redirect ke Screening dulu, bukan dashboard
-        router.push("/Screening");
+        // ✅ UBAH: Redirect ke skill-match dulu, bukan dashboard
+        router.push("/skill-match");
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
@@ -75,7 +76,7 @@ const LoginPage = () => {
   };
 
   const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/Screening" });
+    signIn("google", { callbackUrl: "/skill-match" });
   };
 
   return (
@@ -106,13 +107,13 @@ const LoginPage = () => {
           )}
 
           <Button
-            variant="outline"
-            onClick={handleGoogleSignIn}
-            className="w-full bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <Chrome className="mr-2 h-4 w-4" />
-            Masuk dengan Google
-          </Button>
+                              variant="outline"
+                              onClick={handleGoogleSignIn}
+                              className="w-full bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
+                              <FcGoogle className="mr-2 h-5 w-5" />
+                              Masuk dengan Google
+                              </Button>
 
           <Separator />
 
