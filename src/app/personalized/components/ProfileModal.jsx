@@ -20,8 +20,9 @@ import {
 } from "@/components/ui/select";
 import Image from "next/image";
 
-export default function ProfileModal({ profile, setProfile }) {
-  const [open, setOpen] = useState(false);
+export default function ProfileModal({ profile, setProfile, open, onOpenChange }) {
+
+  
   const [form, setForm] = useState({
     photo: profile.photo || "",
     name: profile.name || "",
@@ -95,16 +96,12 @@ export default function ProfileModal({ profile, setProfile }) {
 
   const handleSave = () => {
     setProfile(form);
-    setOpen(false);
+    onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="w-full bg-[#E4B200] hover:bg-[#D19C00] text-[#2C2C2C] text-sm font-medium rounded-xl">
-          Perbarui Profil
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+     
 
       <DialogContent
         className="max-w-2xl bg-[#FFFDF5] border border-[#E4B200]/30 rounded-2xl shadow-lg overflow-visible"

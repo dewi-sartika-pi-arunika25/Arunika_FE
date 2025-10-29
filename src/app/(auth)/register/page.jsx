@@ -32,8 +32,6 @@ const RegisterPage = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    pendidikan: '',
-    pekerjaan: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -67,8 +65,7 @@ const RegisterPage = () => {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        pendidikan: formData.pendidikan,
-        pekerjaan: formData.pekerjaan,
+      
       });
 
       if (response.data.success) {
@@ -79,9 +76,9 @@ const RegisterPage = () => {
         localStorage.setItem('refresh_token', refresh_token);
         localStorage.setItem('user', JSON.stringify(user));
 
-        setSuccess('Pendaftaran berhasil! Anda akan diarahkan ke Screening...');
+        setSuccess('Pendaftaran berhasil! Anda akan diarahkan ke skillmatch...');
         setTimeout(() => {
-          router.push('/Screening');
+          router.push('/skill-match');
         }, 2000);
       }
     } catch (err) {
@@ -93,7 +90,7 @@ const RegisterPage = () => {
   };
 
   const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl: '/Screening' });
+    signIn('google', { callbackUrl: '/skill-match' });
   };
 
     return (
@@ -170,30 +167,6 @@ const RegisterPage = () => {
                   disabled={isLoading}
                 />
               </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="pendidikan">Pendidikan</Label>
-              <Input
-                id="pendidikan"
-                type="text"
-                placeholder="Mis: S1 Informatika"
-                value={formData.pendidikan}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="pekerjaan">Pekerjaan Saat Ini</Label>
-              <Input
-                id="pekerjaan"
-                type="text"
-                placeholder="Mis: Software Engineer"
-                value={formData.pekerjaan}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
             </div>
 
             <div className="grid gap-2">
