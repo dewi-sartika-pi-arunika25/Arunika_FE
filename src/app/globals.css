@@ -23,7 +23,8 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
+:root { 
+  --nav-h: 72px; 
   --radius: 0.625rem;
 
   --background: #FFFFFF;
@@ -153,41 +154,115 @@
   .footer-links a{ color: var(--footer-text); transition: color .2s ease; }
   .footer-links a:hover{ color: var(--footer-hover); }
   .footer-bottom{ color: var(--footer-text); border-top: 1px solid var(--footer-divider); @apply mt-12 pt-6 text-center text-sm; }
-}
 
-.ilcd-shell{
-  position:relative; border-radius:1rem; background:#fff; box-shadow:0 6px 26px rgba(0,0,0,.06);
-}
-.ilcd-shell::before{
-  content:""; position:absolute; inset:0; border-radius:inherit; padding:1.5px;
-  background: linear-gradient(180deg, var(--accent-2), var(--accent-1) 60%, #0000);
-  -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none; opacity:.9;
-}
-.ilcd-card{ border-radius:1rem; background:#fff; box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--accent-3) 65%, transparent) }
-.ilcd-badge{
-  display:inline-flex; align-items:center; border-radius:9999px; padding:.25rem .75rem;
-  font-size:.75rem; font-weight:600;
-  background: color-mix(in oklab, var(--accent-3) 55%, #fff);
-  color: color-mix(in oklab, var(--text) 80%, #000);
-  border:1px solid color-mix(in oklab, var(--accent-3) 80%, transparent);
-}
-.ilcd-track{
-  height:10px; border-radius:9999px; width:100%;
-  background: color-mix(in oklab, var(--accent-3) 55%, #fff);
-}
-.ilcd-fill{
-  height:100%; border-radius:inherit;
-  background: linear-gradient(90deg, var(--accent-2), var(--primary));
-}
+  .ilcd-shell{
+    position:relative; border-radius:1rem; background:#fff; box-shadow:0 6px 26px rgba(0,0,0,.06);
+  }
+  .ilcd-shell::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; padding:1.5px;
+    background: linear-gradient(180deg, var(--accent-2), var(--accent-1) 60%, #0000);
+    -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none; opacity:.9;
+  }
+  .ilcd-card{ border-radius:1rem; background:#fff; box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--accent-3) 65%, transparent) }
+  .ilcd-badge{
+    display:inline-flex; align-items:center; border-radius:9999px; padding:.25rem .75rem;
+    font-size:.75rem; font-weight:600;
+    background: color-mix(in oklab, var(--accent-3) 55%, #fff);
+    color: color-mix(in oklab, var(--text) 80%, #000);
+    border:1px solid color-mix(in oklab, var(--accent-3) 80%, transparent);
+  }
+  .ilcd-track{
+    height:10px; border-radius:9999px; width:100%;
+    background: color-mix(in oklab, var(--accent-3) 55%, #fff);
+  }
+  .ilcd-fill{
+    height:100%; border-radius:inherit;
+    background: linear-gradient(90deg, var(--accent-2), var(--primary));
+  }
 
-.glass {
-  backdrop-filter: blur(16px);
-  background: color-mix(in oklab, var(--background) 70%, transparent);
-  border: 1px solid color-mix(in oklab, var(--accent-3) 40%, var(--border));
-  border-radius: 1rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,.08);
-}
+  .glass {
+    backdrop-filter: blur(16px);
+    background: color-mix(in oklab, var(--background) 70%, transparent);
+    border: 1px solid color-mix(in oklab, var(--accent-3) 40%, var(--border));
+    border-radius: 1rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
 
-.reveal-hide { opacity: 0; transform: translateY(12px) scale(.98); }
-.reveal-in { opacity: 1; transform: translateY(0) scale(1); transition: opacity .6s ease var(--reveal-delay, 0ms), transform .6s ease var(--reveal-delay, 0ms); }
+  .reveal-hide { opacity: 0; transform: translateY(12px) scale(.98); }
+  .reveal-in { opacity: 1; transform: translateY(0) scale(1); transition: opacity .6s ease var(--reveal-delay, 0ms), transform .6s ease var(--reveal-delay, 0ms); }
+
+  .cta-ripple {
+    position: absolute;
+    border-radius: 9999px;
+    transform: scale(0);
+    opacity: .35;
+    background: currentColor;
+    animation: cta-ripple .6s ease-out forwards;
+  }
+  @keyframes cta-ripple { to { transform: scale(2.5); opacity: 0; } }
+
+  /* ===== WIDTH HELPER — samakan semua section besar ===== */
+  .wrap{
+    max-width: 1100px;
+    margin-inline: auto;
+    padding-inline: 1.5rem;    /* = px-6 */
+  }
+  @media (min-width:640px){
+    .wrap{ padding-inline: 2.5rem; }  /* = sm:px-10 */
+  }
+
+  /* === TEAM FLIP CARD (About Us) === */
+  .team-tilt{ perspective: 1200px; }
+  .team-flip{
+    position: relative; width: 100%; height: 320px; border-radius: 1.25rem;
+    transition: transform .2s ease; will-change: transform;
+  }
+  .team-flip-inner{
+    position: relative; width: 100%; height: 100%;
+    transform-style: preserve-3d;
+    transition: transform .7s cubic-bezier(.22,.65,.18,1);
+    border-radius: inherit; overflow: hidden;
+    background: color-mix(in oklab, var(--background) 85%, transparent);
+    border: 1px solid color-mix(in oklab, var(--accent-3) 50%, var(--border));
+    box-shadow: 0 20px 60px rgba(0,0,0,.06);
+  }
+  .team-flip:hover .team-flip-inner,
+  .team-flip:focus-within .team-flip-inner{ transform: rotateY(180deg); }
+
+  .team-face{
+    position:absolute; inset:0; padding:1rem; display:grid; place-items:center;
+    backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  }
+  .team-front{
+    background:
+      radial-gradient(22rem 12rem at 20% 10%, color-mix(in oklab, var(--accent-3) 40%, transparent), transparent 70%),
+      radial-gradient(18rem 10rem at 85% 20%, color-mix(in oklab, var(--primary) 20%, transparent), transparent 70%),
+      var(--card);
+  }
+  .team-back{
+    transform: rotateY(180deg);
+    background: linear-gradient(145deg,
+      color-mix(in oklab, var(--accent-3) 60%, #fff),
+      color-mix(in oklab, var(--background) 85%, transparent));
+  }
+
+  .team-avatar{
+    width: 136px; height:136px; border-radius: 9999px; overflow:hidden;
+    border: 6px solid color-mix(in oklab, var(--accent-3) 80%, #fff);
+    box-shadow:
+      0 16px 40px -18px color-mix(in oklab, var(--primary) 55%, black),
+      inset 0 0 0 1px color-mix(in oklab, var(--accent-3) 60%, transparent);
+    transition: transform .6s cubic-bezier(.22,.65,.18,1);
+  }
+  .team-flip:hover .team-avatar{ transform: scale(1.06) rotate(-2deg); }
+
+  .team-badge{
+    position:absolute; top:12px; right:14px;
+    padding:.28rem .6rem; font-size:.7rem; font-weight:700; letter-spacing:.06em;
+    color:#fff; border-radius:9999px;
+    background: linear-gradient(90deg,
+      color-mix(in oklab, var(--accent-2) 85%, #000), var(--primary));
+    box-shadow: 0 0 10px color-mix(in oklab, var(--primary) 50%, #000);
+  }
+}
