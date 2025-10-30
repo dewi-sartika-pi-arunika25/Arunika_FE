@@ -23,7 +23,8 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
+:root { 
+  --nav-h: 72px; 
   --radius: 0.625rem;
 
   --background: #FFFFFF;
@@ -191,3 +192,13 @@
 
 .reveal-hide { opacity: 0; transform: translateY(12px) scale(.98); }
 .reveal-in { opacity: 1; transform: translateY(0) scale(1); transition: opacity .6s ease var(--reveal-delay, 0ms), transform .6s ease var(--reveal-delay, 0ms); }
+
+.cta-ripple {
+  position: absolute;
+  border-radius: 9999px;
+  transform: scale(0);
+  opacity: .35;
+  background: currentColor;
+  animation: cta-ripple .6s ease-out forwards;
+}
+@keyframes cta-ripple { to { transform: scale(2.5); opacity: 0; } }

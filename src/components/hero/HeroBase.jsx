@@ -1,142 +1,198 @@
 "use client";
 
-import { motion } from "framer-motion";
-import Parallax from "@/components/hero/Parallax";
+import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import Parallax from "./Parallax";
+import CTAButton from "./CTAButton";
 
-/**
- * HeroBase
- * - Background via `bgUrl` (letakkan di /public)
- * - Scrim lembut agar teks tetap kebaca tanpa panel
- * - Subtitle interaktif (hover: highlight + nudge)
- * - CTA ghost pakai `onClick` (cocok untuk modal)
- */
 export default function HeroBase({
   eyebrow,
   title,
   subtitle,
   ctas = [],
   bgUrl,
-  align = "left",
-  rightSlot = null,        // opsional visual di kanan
+  align = "center",
+  navOffset = false,
+  scrollLink, // { label, href }
 }) {
   const alignText =
     align === "left" ? "text-left items-start" : "text-center items-center";
 
-  // Gradients
-  const bgWash =
-    "linear-gradient(180deg, rgba(255,253,244,.92) 0%, rgba(255,253,244,.80) 36%, rgba(255,253,244,.58) 100%)";
-  const studioGlow =
-    "radial-gradient(50rem 28rem at 75% 35%, color-mix(in oklab, var(--primary) 26%, transparent), transparent 70%), radial-gradient(38rem 22rem at 20% 20%, color-mix(in oklab, var(--accent-2) 22%, transparent), transparent 70%)";
-  // Scrim lembut di kiri (supaya teks kebaca, tapi wallpaper tetap terlihat)
-  const leftScrim =
-    "linear-gradient(90deg, rgba(15,18,25,.30) 0%, rgba(15,18,25,.18) 42%, rgba(15,18,25,0) 76%)";
+  // overlay lembut agar teks kebaca
+  const wash =
+    "linear-gradient(180deg, rgba(255,253,244,.92) 0%, rgba(255,253,244,.78) 36%, rgba(255,253,244,.56) 100%)";
+  const centerScrim = "linear-gradient(0deg, rgba(20,22,28,.16), rgba(20,22,28,.16))";
+
+  // show/hide konten saat scroll
+  const [visible, setVisible] = useState(true);
+  const lastY = useRef(0);
+  const topClamp = 24;
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      const goingUp = y < lastY.current;
+      const nearTop = y <= topClamp;
+      setVisible(nearTop || goingUp);
+      lastY.current = y;
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // spotlight konten
+  const wrapRef = useRef(null);
+  const onMouseMove = (e) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    el.style.setProperty("--mx", `${x}px`);
+    el.style.setProperty("--my", `${y}px`);
+  };
 
   return (
     <section
       id="hero"
       aria-label="Bagian pembuka"
-      className="relative overflow-hidden rounded-2xl border shadow-sm"
+      className="relative w-screen mx-[calc(50%-50vw)] overflow-hidden"
+      style={{
+        paddingTop: navOffset ? "var(--nav-h, 72px)" : undefined,
+        marginTop: navOffset ? undefined : "calc(var(--nav-h, 72px) * -1)",
+      }}
     >
-      {/* Background */}
+      {/* Background nempel ke atas + parallax */}
       {bgUrl && (
         <>
-          <div
-            aria-hidden
-            className="absolute inset-0 -z-20 bg-center bg-cover"
-            style={{ backgroundImage: `url(${bgUrl})`, backgroundColor: "var(--background)" }}
-          />
-          <div aria-hidden className="absolute inset-0 -z-20" style={{ background: bgWash }} />
+          <Parallax
+            className="absolute inset-0 -z-20 will-change-transform"
+            yStrength={120}
+            scaleFrom={1}
+            scaleTo={1.05}
+            mouseTilt
+            disabledBelow={768}
+          >
+            <div
+              aria-hidden
+              className="absolute inset-0 bg-center bg-cover"
+              style={{
+                backgroundImage: `url(${bgUrl})`,
+                top: "calc(var(--nav-h, 72px) * -1)",
+                height: "calc(100% + var(--nav-h, 72px))",
+                position: "absolute",
+                insetInline: 0,
+              }}
+            />
+          </Parallax>
+          <div aria-hidden className="absolute inset-0 -z-10" style={{ background: wash }} />
+          <div aria-hidden className="absolute inset-0 -z-10" style={{ background: centerScrim }} />
         </>
       )}
-      {/* Glow + Scrim */}
-      <div aria-hidden className="absolute inset-0 -z-10" style={{ backgroundImage: studioGlow }} />
-      <div
-        aria-hidden
-        className="absolute inset-y-0 left-0 -z-10 w-[66%] max-lg:w-full"
-        style={{ background: leftScrim }}
-      />
 
-      {/* Content */}
-      <Parallax speed={0.22} className="relative z-10">
-        <div className="px-6 sm:px-10 md:px-14 lg:px-20 py-16 sm:py-20 lg:py-24">
-          <div className="grid lg:grid-cols-[1.05fr_.95fr] items-center gap-10 lg:gap-14">
-            {/* LEFT: Copy */}
-            <div className={`flex flex-col ${alignText} gap-4 max-w-2xl`}>
+      {/* Content wrapper — diturunkan + spotlight halus */}
+      <div
+        ref={wrapRef}
+        onMouseMove={onMouseMove}
+        className="relative z-10 flex items-center justify-center px-6 sm:px-10 md:px-14 lg:px-20"
+        style={{
+          minHeight: "84vh",
+          maxHeight: "96vh",
+          paddingTop: "clamp(12vh, 14vh, 16vh)",
+          paddingBottom: "clamp(8vh, 10vh, 12vh)",
+          background:
+            "radial-gradient(200px 160px at var(--mx, 50%) var(--my, 50%), color-mix(in oklab, var(--background) 40%, transparent), transparent 70%)",
+          transition: "background .15s ease",
+        }}
+      >
+        <AnimatePresence initial mode="popLayout">
+          {visible && (
+            <motion.div
+              key="hero-content"
+              initial={{ opacity: 0, y: 18, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -14, scale: 0.995 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className={`mx-auto flex max-w-4xl flex-col gap-4 ${alignText}`}
+            >
               {eyebrow && (
-                <p className="uppercase tracking-[0.2em] text-xs sm:text-sm text-[var(--accent-2)]">
+                <p
+                  className="uppercase tracking-[0.18em] text-[11px] sm:text-xs"
+                  style={{ color: "var(--accent-2)" }}
+                >
                   {eyebrow}
                 </p>
               )}
 
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight text-[var(--text)] drop-shadow-sm">
+              <h1
+                className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-[var(--text)]"
+                style={{ transition: "transform .18s ease" }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.01)")}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              >
                 {title}
               </h1>
 
               {subtitle && (
                 <motion.p
-                  whileHover={{ scale: 1.02 }}
+                  whileHover={{ scale: 1.01 }}
                   transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                  className="text-base sm:text-lg leading-relaxed max-w-xl
-                             text-[color:var(--text)]/90
-                             hover:text-[color:var(--text)]
-                             rounded-xl px-2 py-1 -mx-2
-                             hover:bg-[color:var(--background)]/40 hover:backdrop-blur-[1px]
-                             hover:ring hover:ring-[color:var(--accent-2)]/25 hover:shadow-sm cursor-default"
+                  className={`text-base sm:text-lg leading-relaxed max-w-2xl ${align === "center" ? "mx-auto" : ""}`}
+                  style={{ color: "color-mix(in oklab, var(--text) 88%, transparent)" }}
                 >
                   {subtitle}
                 </motion.p>
               )}
 
               {!!ctas.length && (
-                <div className="mt-2 flex flex-col sm:flex-row gap-3">
-                  {ctas.map((c) =>
-                    c.variant === "ghost" ? (
-                      <button
-                        key={c.label}
-                        onClick={c.onClick}
-                        className="inline-flex items-center justify-center rounded-full border px-6 py-3 text-sm font-medium transition
-                                   hover:bg-white/20"
-                        style={{ borderColor: "var(--accent-2)", color: "var(--text)" }}
-                      >
-                        {c.label}
-                      </button>
-                    ) : (
-                      <a
-                        key={c.label}
-                        href={c.href || "#"}
-                        className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold text-white shadow-lg"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, color-mix(in oklab, var(--primary) 95%, black) 0%, var(--primary) 100%)",
-                          boxShadow:
-                            "0 14px 30px -12px color-mix(in oklab, var(--primary) 70%, black)",
-                        }}
-                      >
-                        {c.label}
-                      </a>
-                    )
-                  )}
+                <div className={`mt-4 flex gap-3 flex-wrap ${align === "center" ? "justify-center" : ""}`}>
+                  {ctas.map((c) => (
+                    <CTAButton key={c.label} {...c} />
+                  ))}
                 </div>
               )}
-            </div>
 
-            {/* RIGHT: Optional visual slot */}
-            <div className="relative">{rightSlot}</div>
-          </div>
-        </div>
-      </Parallax>
+              {/* (hapus microcopy gratis) */}
 
-      {/* Decorative wave */}
-      <svg
-        aria-hidden
-        className="absolute -bottom-px left-0 right-0 w-full h-10 sm:h-14 lg:h-16"
-        viewBox="0 0 1440 100"
-        preserveAspectRatio="none"
-      >
-        <path
-          d="M0,60 C180,20 360,20 540,60 C720,100 900,100 1080,60 C1260,20 1350,20 1440,60 L1440,100 L0,100 Z"
-          fill="rgba(0,0,0,0.04)"
-        />
+              {/* Link scroll: teks saja + efek hover */}
+              {scrollLink?.href && (
+                <div className="mt-6 flex justify-center">
+                  <a
+                    href={scrollLink.href}
+                    className="group inline-flex items-center gap-1 text-sm font-medium tracking-wide"
+                    style={{
+                      color: "color-mix(in oklab, var(--text) 78%, transparent)",
+                    }}
+                  >
+                    <span className="relative">
+                      {scrollLink.label || "Lihat keunggulan kami"}
+                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-px w-0 bg-current transition-all duration-300 group-hover:w-full" />
+                    </span>
+                    <svg
+                      className="h-4 w-4 opacity-0 translate-y-0.5 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-1"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M12 5v14m0 0l-6-6m6 6l6-6"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </a>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Wave bawah */}
+      <svg aria-hidden className="block w-full translate-y-px" viewBox="0 0 1440 110" preserveAspectRatio="none">
+        <path d="M0,70 C420,150 1020,0 1440,70 L1440,110 L0,110 Z" fill="var(--background)" />
       </svg>
     </section>
   );
