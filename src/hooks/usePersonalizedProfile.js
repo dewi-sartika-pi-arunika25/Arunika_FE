@@ -1,7 +1,7 @@
 // hooks/usePersonalizedProfile.js
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI } from '@/lib/api';
+import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI, usersAPI } from '@/lib/api';
 
 /**
  * Main hook untuk personalized dashboard
@@ -13,7 +13,7 @@ export function usePersonalizedProfile() {
   const recId = searchParams.get('rec_id');
   
   const [profile, setProfile] = useState(null);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // ✅ diperbaiki: hapus const userId yang salah
   const [jobRecommendations, setJobRecommendations] = useState([]);
   const [skillRecommendations, setSkillRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +39,26 @@ export function usePersonalizedProfile() {
         const profileData = profileRes.data.data.personalized;
         setProfile(profileData);
 
-        // 2. Fetch job recommendations (rec_pekerjaan)
+        // 2. Fetch user name berdasarkan user_id
+        const userId = profileData?.user_id;
+        if (userId) {
+          try {
+            const userRes = await usersAPI.getById(userId);
+            if (userRes.data?.success && userRes.data.data?.user) {
+              setUser(userRes.data.data.user);
+            } else {
+              // fallback kalau user_id sudah berupa nama
+              setUser({ name: userId });
+            }
+          } catch (userErr) {
+            console.warn('Gagal fetch user detail, fallback ke user_id:', userErr);
+            setUser({ name: userId });
+          }
+        } else {
+          setUser({ name: 'User Tidak Dikenal' });
+        }
+
+        // 3. Fetch job recommendations (rec_pekerjaan)
         try {
           const jobsRes = await recPekerjaanAPI.getByRecId(recId);
           if (jobsRes.data.success) {
@@ -51,7 +70,7 @@ export function usePersonalizedProfile() {
           setJobRecommendations([]);
         }
 
-        // 3. Fetch skill recommendations (rec_skillup)
+        // 4. Fetch skill recommendations (rec_skillup)
         try {
           const skillsRes = await recSkillupAPI.getByRecId(recId);
           if (skillsRes.data.success) {
@@ -107,6 +126,7 @@ export function usePersonalizedProfile() {
 
   return {
     profile,
+    user, // ✅ ditambahkan agar bisa digunakan di komponen (misal DashboardContent)
     recId,
     loading,
     error,

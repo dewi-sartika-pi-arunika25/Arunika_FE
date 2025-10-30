@@ -34,50 +34,18 @@ export default function Header() {
       {/* === RIGHT SIDE === */}
       <div className="flex items-center gap-3">
         {/* Tombol navigasi utama */}
-        <Button className="bg-[#FF8C00] hover:bg-[#E67600] text-white font-medium text-sm rounded-xl">
+        <Button className="bg-[#FF6A00] hover:bg-[#FFA14A] text-white font-medium text-sm rounded-xl">
           ARUNA QUEST
         </Button>
-        <Button className="bg-[#E4B200] hover:bg-[#D19C00] text-[#2C2C2C] font-medium text-sm rounded-xl">
+        <Button className="bg-[#FF6A00] hover:bg-[#FFA14A] text-white font-medium text-sm rounded-xl">
           MIRROR CHAT
         </Button>
 
-        {/* === NOTIFICATION BELL === */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="relative p-2 rounded-full hover:bg-[#FFF6DC] transition-all">
-              <Bell className="h-5 w-5 text-[#A56400]" />
-              {/* Titik notifikasi aktif */}
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#FF8C00] rounded-full border border-[#FFFDF5]"></span>
-            </button>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent className="w-64 bg-[#FFFDF5] border border-[#E4B200]/30 shadow-lg rounded-xl">
-            <DropdownMenuLabel className="text-sm font-semibold text-[#A56400]">
-              Notifikasi
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem className="text-sm text-[#2C2C2C] hover:bg-[#FFF6DC]">
-              ✨ AI menemukan 2 lowongan baru untukmu!
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-sm text-[#2C2C2C] hover:bg-[#FFF6DC]">
-              💡 Rekomendasi skill baru: Leadership Communication
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-sm text-[#2C2C2C] hover:bg-[#FFF6DC]">
-              🌿 Pesan harian Mirror Chat sudah siap
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-xs text-gray-500 justify-center">
-              Lihat semua notifikasi
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         {/* === LOGOUT BUTTON === */}
         <Button
           variant="ghost"
-          className="text-gray-600 hover:text-[#FF8C00] hover:bg-[#FFF6DC] flex items-center gap-2 text-sm"
+          className="text-gray-600 hover:text-[#FF6A00] hover:bg-[#FFF6DC] flex items-center gap-2 text-sm"
            onClick={handleLogout}
         >
           <LogOut className="h-5 w-5" />
