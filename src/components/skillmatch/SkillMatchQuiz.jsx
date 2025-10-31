@@ -1,112 +1,23 @@
 // components/skillmatch/SkillMatchQuiz.jsx
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSkillMatch } from '@/hooks/useSkillMatch';
-import { computeScore, computeFit, topStrengths } from '@/lib/skill/score';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import  Badge  from '@/components/ui/Badge';
-import { BookOpen, Loader, Sparkles, X, Check } from 'lucide-react';
-import Modal from '@/components/ui/Modal';
+import { BookOpen, Loader, Sparkles, Check } from 'lucide-react';
 
-// --- ResultCard ---
-function ResultCard({ score, strengths, onExplore, onClose }) {
-  const { role, fit } = score;
-
-  return (
-    <Card className="w-full max-w-md shadow-2xl">
-      <div
-        className="rounded-t-2xl px-6 py-5 text-center relative"
-        style={{ background: "linear-gradient(180deg, rgba(250,225,60,.25), rgba(255,253,244,.0))" }}
-      >
-        <button
-          onClick={onClose}
-          className="absolute right-3 top-3 p-2 rounded-full hover:bg-gray-200 transition"
-        >
-          <X className="w-5 h-5 text-gray-600" />
-        </button>
-
-        <h3
-          className="text-lg font-semibold"
-          style={{
-            background: "linear-gradient(90deg, #FAE13C, #FF8300)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            letterSpacing: ".02em",
-          }}
-        >
-          Rekomendasi Peran Untukmu
-        </h3>
-      </div>
-
-      <CardContent className="p-6">
-        <div className="text-center mb-6">
-          <span
-            className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold mb-3"
-            style={{ background: "rgba(250,225,60,.22)" }}
-          >
-            <Sparkles className="w-4 h-4" />
-            {role}
-          </span>
-
-          <div className="text-6xl font-extrabold text-orange-600 leading-none">
-            {fit}
-            <span className="text-2xl text-gray-500 align-top ml-1">%</span>
-          </div>
-          <div className="text-gray-500 text-sm mt-2">Fit Score</div>
-        </div>
-
-        <div className="mb-6">
-          <h4 className="font-semibold text-gray-900 mb-3">Kekuatan Utamamu</h4>
-          <div className="flex flex-wrap gap-2">
-            {strengths.map((s) => (
-              <Badge key={s} className="bg-orange-100 text-orange-700">
-                {s}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6 pb-6 border-b border-gray-200">
-          <h4 className="font-semibold text-gray-900 mb-3">Saran Aksi</h4>
-          <ul className="space-y-2 text-sm text-gray-700">
-            <li className="flex gap-2">
-              <span className="mt-1.5 inline-block w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
-              Ambil mini-project 1–2 minggu sesuai peran.
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1.5 inline-block w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
-              Tulis studi kasus singkat untuk portofolio.
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1.5 inline-block w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
-              Minta feedback mentor/komunitas.
-            </li>
-          </ul>
-        </div>
-
-        <div className="flex justify-center">
-          <Button
-            onClick={onExplore}
-            className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:opacity-95 text-white font-semibold px-6 py-3 rounded-lg"
-          >
-            Jelajahi Lab Career →
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+// ResultCard removed per requirement: auto-redirect to Personalized after submission
 
 // --- SkillMatchQuiz ---
 export default function SkillMatchQuiz() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const roleCategory = searchParams.get('role') || 'Frontend Developer';
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(false); // kept for compatibility; not used
 
   const {
     questions,
@@ -117,7 +28,10 @@ export default function SkillMatchQuiz() {
     handleAnswer,
     handleSubmit: hookSubmit,
     answeredCount,
-    totalQuestions
+    totalQuestions,
+    scoreData,
+    fitScore,
+    strengthsList
   } = useSkillMatch(roleCategory);
 
   const progress = totalQuestions > 0 
@@ -126,31 +40,42 @@ export default function SkillMatchQuiz() {
 
   const allAnswered = totalQuestions > 0 && answeredCount === totalQuestions;
 
-  // Compute score for preview
-  const scoreData = useMemo(
-    () => questions.length > 0 ? computeScore(questions, answers) : { traitAvg: {}, archetype: 'The Explorer', roleCategory: 'Backend Developer', bestScore: 0 },
-    [questions, answers]
-  );
-
-  const fit = useMemo(
-    () => computeFit(scoreData.bestScore || 0, answeredCount, totalQuestions || 1),
-    [scoreData.bestScore, answeredCount, totalQuestions]
-  );
-
-  const strengths = useMemo(() => topStrengths(scoreData.traitAvg), [scoreData.traitAvg]);
-
   // Submit → show modal
   async function handleSubmit(e) {
     e.preventDefault();
     if (!allAnswered || submitting) return;
     await hookSubmit(e);
-    setShowModal(true);
+    try {
+      const saved = typeof window !== 'undefined'
+        ? JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}')
+        : null;
+      const recId = saved?.recId;
+      if (recId) {
+        router.push(`/personalized?rec_id=${recId}`);
+      } else {
+        router.push('/personalized');
+      }
+    } catch (err) {
+      router.push('/personalized');
+    }
   }
 
   // Redirect when button clicked
   const handleExplore = () => {
     setShowModal(false);
-    router.push('/personalized');
+    try {
+      const saved = typeof window !== 'undefined'
+        ? JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}')
+        : null;
+      const recId = saved?.recId;
+      if (recId) {
+        router.push(`/personalized?rec_id=${recId}`);
+      } else {
+        router.push('/personalized');
+      }
+    } catch (e) {
+      router.push('/personalized');
+    }
   };
 
   if (loading) {
@@ -172,7 +97,7 @@ export default function SkillMatchQuiz() {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-3 mb-4">
             <BookOpen className="h-8 w-8 text-orange-500" />
-            <h1 className="text-3xl font-bold">{roleCategory} Assessment</h1>
+            <h1 className="text-3xl font-bold">Skillmatch</h1>
           </div>
           <p className="text-gray-600 mb-2">
             Jawab {totalQuestions} pertanyaan dengan jujur untuk mendapatkan analisis karir yang akurat
@@ -195,7 +120,7 @@ export default function SkillMatchQuiz() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {questions.map((question, idx) => (
-            <Card key={question.id} className="shadow-md bg-white border border-yellow-200 hover:shadow-lg transition">
+            <Card key={`${question.id}-${idx}`} className="shadow-md bg-white border border-yellow-200 hover:shadow-lg transition">
               <CardContent className="p-6">
                 <div className="mb-4">
                   <div className="flex items-start justify-between mb-2">
@@ -280,18 +205,7 @@ export default function SkillMatchQuiz() {
         </form>
       </div>
 
-      {/* Modal: Result Card */}
-      <Modal 
-        open={showModal} 
-        onClose={() => setShowModal(false)}
-      >
-        <ResultCard
-          score={{ role: scoreData.archetype, fit }}
-          strengths={strengths}
-          onClose={() => setShowModal(false)}
-          onExplore={handleExplore}
-        />
-      </Modal>
+      {/* Modal removed */}
     </div>
   );
 }

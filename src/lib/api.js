@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+// Gunakan proxy Next.js (/api) agar semua request lewat localhost:3000
+const API_BASE_URL = '/api';
 
 // Create axios instance
 const api = axios.create({
@@ -74,15 +75,14 @@ export const usersAPI = {
 };
 
 // ============ SKILL QUESTIONS ENDPOINTS ============
-
 export const skillQuestionsAPI = {
   getAll: (page = 1, limit = 12, roleCategory = null) => {
     let url = `/skill-questions?page=${page}&limit=${limit}`;
     if (roleCategory) url += `&role_category=${encodeURIComponent(roleCategory)}`;
     return api.get(url);
   },
-  getByRole: (roleCategory) => 
-    api.get(`/skill-questions?role_category=${encodeURIComponent(roleCategory)}`),
+  getByRole: (roleCategory) =>
+    api.get(`/assessment/generate-questions?role_category=${encodeURIComponent(roleCategory)}`),
   getCategories: () => api.get('/skill-questions/categories'),
   getById: (id) => api.get(`/skill-questions/${id}`),
   create: (data) => api.post('/skill-questions', data),
@@ -90,77 +90,76 @@ export const skillQuestionsAPI = {
   delete: (id) => api.delete(`/skill-questions/${id}`),
 };
 
-// ============ PEKERJAAN ENDPOINTS ============
+// ============ ASSESSMENT ENDPOINTS ============
+export const assessmentAPI = {
+  generateQuestions: () => api.get('/assessment/generate-questions'),
+  submitAssessment: (data) => api.post('/assessment/submit', data),
+  // Legacy aliases for backward compatibility
+  submitAnswers: (data) => api.post('/assessment/submit', data),
+  getResults: () => api.get('/assessment/results'),
+  checkStatus: () => api.get('/assessment/status'),
+  refreshAIAnalysis: () => api.post('/assessment/refresh-ai'),
+};
 
+// ============ PEKERJAAN ENDPOINTS ============
 export const pekerjaanAPI = {
-  getAll: (page = 1, limit = 10, bidang = null) => {
-    let url = `/pekerjaan?page=${page}&limit=${limit}`;
-    if (bidang) url += `&bidang=${bidang}`;
-    return api.get(url);
-  },
-  getById: (id) => api.get(`/pekerjaan/${id}`),
-  create: (data) => api.post('/pekerjaan', data),
-  update: (id, data) => api.put(`/pekerjaan/${id}`, data),
-  delete: (id) => api.delete(`/pekerjaan/${id}`),
+  getAll: (page = 1, limit = 10) => api.get(`/jobs?page=${page}&limit=${limit}`),
+  getById: (id) => api.get(`/jobs/${id}`),
+  create: (data) => api.post('/jobs', data),
+  update: (id, data) => api.put(`/jobs/${id}`, data),
+  delete: (id) => api.delete(`/jobs/${id}`),
 };
 
 // ============ JOB SKILLS ENDPOINTS ============
-
 export const jobSkillsAPI = {
-  getByRoleAndLevel: (role, level) => 
-    api.get(`/pekerjaan/skills/${role}/${level}`),
-  getByRole: (role) => 
-    api.get(`/pekerjaan/skills/${role}/all`),
-  getAll: () => 
-    api.get('/pekerjaan/skills'),
+  getByRoleAndLevel: (role, level) =>
+    api.get(`/jobs/${encodeURIComponent(role)}/${encodeURIComponent(level)}`),
+  getByRole: (role) =>
+    api.get(`/jobs/${encodeURIComponent(role)}/all-skills`),
+  getAll: () => api.get('/jobs/skills/all'),
 };
 
-// ============ SKILLUP ENDPOINTS ============
-
+// ============ SKILLUP (SKILLS) ENDPOINTS ============
 export const skillupAPI = {
   getAll: (page = 1, limit = 10, level = null) => {
-    let url = `/skillup?page=${page}&limit=${limit}`;
+    let url = `/skills?page=${page}&limit=${limit}`;
     if (level) url += `&level=${level}`;
     return api.get(url);
   },
-  getById: (id) => api.get(`/skillup/${id}`),
-  create: (data) => api.post('/skillup', data),
-  update: (id, data) => api.put(`/skillup/${id}`, data),
-  delete: (id) => api.delete(`/skillup/${id}`),
+  getById: (id) => api.get(`/skills/${id}`),
+  create: (data) => api.post('/skills', data),
+  update: (id, data) => api.put(`/skills/${id}`, data),
+  delete: (id) => api.delete(`/skills/${id}`),
 };
 
 // ============ PERSONALIZED ENDPOINTS ============
-
 export const personalizedAPI = {
-  getByUserId: (userId, page = 1, limit = 10) => 
-    api.get(`/users/${userId}/personalized?page=${page}&limit=${limit}`),
+  getByUserId: (userId, page = 1, limit = 10) =>
+    api.get(`/personalized/user/${userId}?page=${page}&limit=${limit}`),
   getById: (id) => api.get(`/personalized/${id}`),
+  getWithRecs: (id) => api.get(`/personalized/${id}/recommendations`),
   create: (data) => api.post('/personalized', data),
   update: (id, data) => api.put(`/personalized/${id}`, data),
 };
 
 // ============ REC PEKERJAAN ENDPOINTS ============
-
 export const recPekerjaanAPI = {
-  getByRecId: (recId, page = 1, limit = 10) => 
-    api.get(`/personalized/${recId}/jobs?page=${page}&limit=${limit}`),
-  add: (data) => api.post('/rec-pekerjaan', data),
-  remove: (id) => api.delete(`/rec-pekerjaan/${id}`),
+  getByRecId: (recId, page = 1, limit = 10) =>
+    api.get(`/recommendations/jobs/${recId}?page=${page}&limit=${limit}`),
+  add: (data) => api.post('/recommendations/jobs', data),
+  remove: (id) => api.delete(`/recommendations/jobs/${id}`),
 };
 
-// ============ REC SKILLUP ENDPOINTS ============
-
 export const recSkillupAPI = {
-  getByRecId: (recId, page = 1, limit = 10) => 
-    api.get(`/personalized/${recId}/skills?page=${page}&limit=${limit}`),
-  add: (data) => api.post('/rec-skillup', data),
-  remove: (id) => api.delete(`/rec-skillup/${id}`),
+  getByRecId: (recId, page = 1, limit = 10) =>
+    api.get(`/recommendations/skills/${recId}?page=${page}&limit=${limit}`),
+  add: (data) => api.post('/recommendations/skills', data),
+  remove: (id) => api.delete(`/recommendations/skills/${id}`),
 };
 
 // ============ PROFILE ENDPOINTS ============
-
 export const profileAPI = {
-  getComplete: (userId) => api.get(`/profile/${userId}`),
+  getComplete: (userId) => api.get(`/users/${userId}/profile`),
 };
 
 export default api;
