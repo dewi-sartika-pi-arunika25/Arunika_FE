@@ -4,8 +4,13 @@ import { useState, useEffect } from "react";
 import { Home, Brain, Target, BarChart3, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
 
-export default function Sidebar({ activeMenu, setActiveMenu, userProfile, onEditProfile }) {
+export default function Sidebar({ activeMenu, setActiveMenu, userProfile = {}, onEditProfile }) {
+  const { user } = usePersonalizedProfile();
+  const displayName = user?.name || userProfile.name || "Pengguna";
+  const initials = (displayName?.match(/\b\w/g) || []).slice(0,2).join('').toUpperCase() || userProfile.initials || "US";
+  const photo = userProfile.photo;
   const menuItems = [
     { key: "dashboard", icon: <Home size={20} />, label: "Dashboard" },
     { key: "analisis", icon: <Brain size={20} />, label: "Analisis AI" },
@@ -26,9 +31,9 @@ export default function Sidebar({ activeMenu, setActiveMenu, userProfile, onEdit
           <div className="mt-8 flex flex-col items-center relative">
             {/* Foto Profil */}
             <div className="relative">
-              {userProfile.photo ? (
+              {photo ? (
                 <Image
-                  src={userProfile.photo}
+                  src={photo}
                   alt="Profile"
                   width={64}
                   height={64}
@@ -36,7 +41,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, userProfile, onEdit
                 />
               ) : (
                 <div className="w-16 h-16 rounded-full bg-yellow-500 text-white flex items-center justify-center text-xl font-bold shadow-inner">
-                  {userProfile.initials || "ZN"}
+                  {initials}
                 </div>
               )}
 
@@ -51,7 +56,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, userProfile, onEdit
 
             {/* Nama */}
             <p className="mt-3 font-semibold text-gray-800 text-center">
-              {userProfile.name || "Zulfatun Nikmah"}
+              {displayName}
             </p>
           </div>
         </div>

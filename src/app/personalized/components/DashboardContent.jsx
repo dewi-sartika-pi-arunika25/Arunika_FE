@@ -55,13 +55,33 @@ export default function DashboardContent() {
   }, [roleFit]);
 
   const radarData = useMemo(() => {
-    return (
-      strengths?.topThree?.map((s, i) => ({
-        subject: s,
-        A: Math.max(20, 100 - i * 15),
-      })) || []
-    );
+    const mapDimensionToName = (key) => {
+      if (!key) return key;
+      const k = String(key).trim().toUpperCase();
+      const discMap = { D: 'Dominance', I: 'Influence', S: 'Steadiness', C: 'Conscientiousness' };
+      const riasecMap = {
+        R: 'Realistic', I2: 'Investigative', A: 'Artistic', S2: 'Social', E: 'Enterprising', C2: 'Conventional'
+      };
+      // Disambiguate keys: if topThree contains single letters, map DISC; if RIASEC letters detected, map accordingly
+      if (discMap[k]) return discMap[k];
+      if (riasecMap[k]) return riasecMap[k];
+      // If already a readable name, just return it
+      return key;
+    };
+
+    const subjects = strengths?.topThree || [];
+    return subjects.map((s, i) => ({
+      subject: mapDimensionToName(s),
+      A: Math.max(35, 95 - i * 12),
+    }));
   }, [strengths]);
+
+  const dimensionToName = (key) => {
+    if (!key) return key;
+    const k = String(key).trim().toUpperCase();
+    const discMap = { D: 'Dominance', I: 'Influence', S: 'Steadiness', C: 'Conscientiousness' };
+    return discMap[k] || key;
+  };
 
   const jobData = useMemo(() => {
     return (
@@ -221,8 +241,8 @@ export default function DashboardContent() {
             <div className="text-sm text-gray-600">Kesiapan</div>
           </div>
 
-          <div className="h-[210px] flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full" style={{ height: 210, minWidth: 280 }}>
+            <ResponsiveContainer width="100%" height={210}>
               <RePieChart>
                 <Pie
                   data={pieData}
@@ -272,9 +292,9 @@ export default function DashboardContent() {
           </div>
 
           <div className="grid grid-cols-12 gap-3 items-center">
-            <div className="col-span-6 h-44">
+            <div className="col-span-6">
               {radarData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={176}>
                   <RadarChart data={radarData}>
                     <PolarGrid />
                     <PolarAngleAxis dataKey="subject" />
@@ -308,7 +328,7 @@ export default function DashboardContent() {
                   >
                     <div className="flex justify-between items-center">
                       <div>
-                        <div className="text-sm font-semibold text-[#2C2C2C]">{s}</div>
+                        <div className="text-sm font-semibold text-[#2C2C2C]">{dimensionToName(s)}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           {idx === 0 ? "Kekuatan utama" : "Kekuatan"}
                         </div>
@@ -344,9 +364,9 @@ export default function DashboardContent() {
             <div className="text-sm text-gray-600">Rata-rata: {pct(levelSkillGap)}</div>
           </div>
 
-          <div className="h-[220px]">
+          <div style={{ height: 220, minWidth: 280 }}>
             {skillGapData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={skillGapData} layout="vertical" margin={{ left: 12 }}>
                   <XAxis type="number" hide />
                   <YAxis dataKey="skill" type="category" width={120} />
@@ -357,9 +377,22 @@ export default function DashboardContent() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                Tidak ada data skill gap.
-              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={(
+                  (strengths?.topThree || []).slice(0, 3).map((s, i) => ({
+                    skill: s,
+                    gap: 20 + i * 10,
+                    target: 60 - i * 5
+                  }))
+                )} layout="vertical" margin={{ left: 12 }}>
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="skill" type="category" width={120} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="gap" name="Saat Ini" fill="#FFE89C" />
+                  <Bar dataKey="target" name="Target" fill="#E4B200" />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </div>
         </motion.div>
