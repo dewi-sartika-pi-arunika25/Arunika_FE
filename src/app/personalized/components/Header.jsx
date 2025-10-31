@@ -1,10 +1,12 @@
 "use client";
-import { LogOut, Search } from "lucide-react";
+import { LogOut, Search, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
 
 export default function Header() {
   const router = useRouter();
+  const { recId, loading, error, user } = usePersonalizedProfile();
 
   // Fungsi logout
   const handleLogout = () => {
@@ -23,7 +25,7 @@ export default function Header() {
       {/* Judul */}
       <div>
         <h1 className="text-xl font-semibold text-[#2C2C2C]">
-          Selamat Datang, 
+          Selamat Datang, <span className="text-[#E4B200]">{user?.name || 'Pengguna'}</span> 🌞
         </h1>
         <p className="text-sm text-gray-500">
           Analisis AI & Rekomendasi Personalisasi
@@ -40,6 +42,35 @@ export default function Header() {
             placeholder="Cari data..."
             className="bg-transparent outline-none text-sm px-2"
           />
+        </div>
+
+        {/* Debug Badge: rec_id + status */}
+        <div
+          className={`hidden md:flex items-center gap-2 px-3 py-2 rounded-xl border text-sm ${
+            loading
+              ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+              : error
+              ? "bg-red-50 border-red-200 text-red-700"
+              : "bg-green-50 border-green-200 text-green-700"
+          }`}
+          title={error ? `Error: ${error}` : recId ? `rec_id: ${recId}` : "rec_id belum tersedia"}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Memuat personalized…</span>
+            </>
+          ) : error ? (
+            <>
+              <span className="font-medium">rec_id</span>
+              <span className="truncate max-w-[140px]">Error</span>
+            </>
+          ) : (
+            <>
+              <span className="font-medium">rec_id</span>
+              <span className="truncate max-w-[140px]">{recId || "-"}</span>
+            </>
+          )}
         </div>
 
         {/* Tombol Logout */}
