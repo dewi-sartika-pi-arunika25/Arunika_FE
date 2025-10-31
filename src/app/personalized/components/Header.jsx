@@ -23,7 +23,7 @@ export default function Header() {
       {/* Judul */}
       <div>
         <h1 className="text-xl font-semibold text-[#2C2C2C]">
-          Selamat Datang, <span className="text-[#E4B200]">Zulfa</span> 🌞
+          Selamat Datang, 
         </h1>
         <p className="text-sm text-gray-500">
           Analisis AI & Rekomendasi Personalisasi
