@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Target, BookOpenCheck, Brain, Briefcase, Sparkles } from "lucide-react";
 import FeatureCard from "./FeatureCard";
 
+// Map tag ke ikon default biar otomatis ada ikon di chip
 const TAG_ICON = {
   Onboarding:   <Sparkles className="h-3.5 w-3.5" />,
   Assessment:   <BookOpenCheck className="h-3.5 w-3.5" />,
@@ -36,7 +37,7 @@ const featureRows = [
     tag: "AI Insights",
     icon: TAG_ICON["AI Insights"],
     imageSrc: "/feature-ai.png",
-    alt: "Grafik analitik AI",
+    alt: "Grafik analitik AI dengan role fit dan skill gaps",
     description:
       "Analisis unik seperti Role Fit, Skill Gaps, dan Kekuatan Utama yang siap ditindaklanjuti.",
   },
@@ -65,35 +66,22 @@ const stagger = {
   show:   { opacity: 1, transition: { staggerChildren: 0.08 } },
 };
 
-export default function FeatureRow() {
+export default function FeatureGrid() {
   return (
     <motion.div
       variants={stagger}
       initial="hidden"
       whileInView="show"
-      viewport={{ once: false, amount: 0.15 }}
-      className="mt-10 sm:mt-12"
+      viewport={{ once: false, amount: 0.2 }}
+      className="
+        mt-10 sm:mt-12
+        grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+        gap-5 lg:gap-6
+      "
     >
-      <div
-        className="
-          -mx-3 sm:-mx-4
-          flex gap-4 sm:gap-5
-          overflow-x-auto no-scrollbar
-          scroll-smooth
-          snap-x snap-mandatory
-          px-3 sm:px-4 pb-4
-        "
-      >
-        {featureRows.map((feature, idx) => (
-          <div
-            key={idx}
-            className="flex-none snap-center"
-            style={{ width: "min(340px, 86vw)" }}
-          >
-            <FeatureCard feature={feature} />
-          </div>
-        ))}
-      </div>
+      {featureRows.map((feature, idx) => (
+        <FeatureCard key={idx} feature={feature} />
+      ))}
     </motion.div>
   );
 }
