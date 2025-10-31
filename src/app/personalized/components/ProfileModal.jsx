@@ -20,8 +20,7 @@ import {
 } from "@/components/ui/select";
 import Image from "next/image";
 
-export default function ProfileModal({ profile, setProfile, open, onOpenChange }) {
-
+export default function ProfileModal({ profile, setProfile, open, setOpen }) {
   
   const [form, setForm] = useState({
     photo: profile.photo || "",
@@ -96,20 +95,15 @@ export default function ProfileModal({ profile, setProfile, open, onOpenChange }
 
   const handleSave = () => {
     setProfile(form);
-    onOpenChange(false);
+    setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-     
-
-      <DialogContent
-        className="max-w-2xl bg-[#FFFDF5] border border-[#E4B200]/30 rounded-2xl shadow-lg overflow-visible"
-        style={{ overflowY: "auto" }}
-      >
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold text-[#A56400]">
-            Perbarui Profil Pengguna
+          <DialogTitle className="text-lg font-semibold text-[#2C2C2C]">
+            Edit Profil
           </DialogTitle>
         </DialogHeader>
 

@@ -1,7 +1,7 @@
 // hooks/usePersonalizedProfile.js
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI, usersAPI } from '@/lib/api';
+import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI, usersAPI, assessmentAPI } from '@/lib/api';
 
 /**
  * Main hook untuk personalized dashboard
@@ -10,7 +10,20 @@ import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI, usersAPI }
  */
 export function usePersonalizedProfile() {
   const searchParams = useSearchParams();
-  const recId = searchParams.get('rec_id');
+  const recId = (() => {
+    const fromQuery = searchParams.get('rec_id');
+    if (fromQuery) return fromQuery;
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}');
+        return saved?.recId || null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  })();
+  const isLocalRec = recId && String(recId).startsWith('local-');
   
   const [profile, setProfile] = useState(null);
   const [user, setUser] = useState(null); // ✅ diperbaiki: hapus const userId yang salah
@@ -18,11 +31,26 @@ export function usePersonalizedProfile() {
   const [skillRecommendations, setSkillRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [aiStatus, setAiStatus] = useState('');
 
   // Fetch profile + recommendations
   useEffect(() => {
     if (!recId) {
-      setError('rec_id tidak ditemukan');
+      // Fallback ke data lokal jika tersedia
+      try {
+        const saved = typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}') : {};
+        if (saved?.personalizedRecord) {
+          setProfile(saved.personalizedRecord);
+          setUser({ name: saved.personalizedRecord.user_id || 'User' });
+          setJobRecommendations([]);
+          setSkillRecommendations([]);
+          setError('');
+        } else {
+          setError('rec_id tidak ditemukan. Pastikan datang dari Skillmatch atau sertakan ?rec_id=...');
+        }
+      } catch (e) {
+        setError('rec_id tidak ditemukan. Pastikan datang dari Skillmatch atau sertakan ?rec_id=...');
+      }
       setLoading(false);
       return;
     }
@@ -30,62 +58,153 @@ export function usePersonalizedProfile() {
     const fetchAll = async () => {
       try {
         setLoading(true);
-
-        // 1. Fetch personalized profile
-        const profileRes = await personalizedAPI.getById(recId);
-        if (!profileRes.data.success) {
-          throw new Error('Gagal fetch profile');
+        
+        // Jika menggunakan rec_id lokal, gunakan data dari sessionStorage tanpa call API
+        if (isLocalRec) {
+          const saved = typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}') : {};
+          if (saved?.personalizedRecord) {
+            setProfile(saved.personalizedRecord);
+            setUser({ name: saved.personalizedRecord.user_id || 'User' });
+            setJobRecommendations([]);
+            setSkillRecommendations([]);
+            setError('');
+            return; // selesai local mode
+          }
         }
-        const profileData = profileRes.data.data.personalized;
+
+        // 1. Fetch personalized profile + recommendations dari API (prefer bundled endpoint)
+        let profileData = null;
+        let jobRecs = [];
+        let skillRecs = [];
+        try {
+          const bundleRes = await personalizedAPI.getWithRecs(recId);
+          if (bundleRes.data?.success) {
+            profileData = bundleRes.data.data.personalized;
+            jobRecs = bundleRes.data.data.job_recommendations || [];
+            skillRecs = bundleRes.data.data.skill_recommendations || [];
+          }
+        } catch (_) {
+          // fallback to separate calls below
+        }
+
+        if (!profileData) {
+          const profileRes = await personalizedAPI.getById(recId);
+          if (!profileRes.data.success) {
+            throw new Error('Gagal fetch profile');
+          }
+          profileData = profileRes.data.data.personalized;
+        }
         setProfile(profileData);
 
-        // 2. Fetch user name berdasarkan user_id
+        // 2. Resolve nama pengguna secara robust
         const userId = profileData?.user_id;
         if (userId) {
-          try {
-            const userRes = await usersAPI.getById(userId);
-            if (userRes.data?.success && userRes.data.data?.user) {
-              setUser(userRes.data.data.user);
-            } else {
-              // fallback kalau user_id sudah berupa nama
-              setUser({ name: userId });
+          // Jika user_id adalah objek yang sudah berisi nama/id
+          if (typeof userId === 'object') {
+            const name = resolveUserName(userId);
+            setUser({ name, id: userId.id || userId.user_id || null });
+          } else {
+            try {
+              const userRes = await usersAPI.getById(userId);
+              if (userRes.data?.success && userRes.data.data?.user) {
+                const userObj = userRes.data.data.user;
+                const name = resolveUserName(userObj, userId);
+                setUser({ ...userObj, name });
+              } else {
+                // fallback kalau user_id sudah berupa nama string
+                const name = typeof userId === 'string' ? userId : 'Pengguna';
+                setUser({ name });
+              }
+            } catch (userErr) {
+              console.warn('Gagal fetch user detail, fallback ke user_id:', userErr);
+              const name = typeof userId === 'string' ? userId : 'Pengguna';
+              setUser({ name });
             }
-          } catch (userErr) {
-            console.warn('Gagal fetch user detail, fallback ke user_id:', userErr);
-            setUser({ name: userId });
           }
         } else {
-          setUser({ name: 'User Tidak Dikenal' });
+          setUser({ name: 'Pengguna' });
         }
 
-        // 3. Fetch job recommendations (rec_pekerjaan)
-        try {
-          const jobsRes = await recPekerjaanAPI.getByRecId(recId);
-          if (jobsRes.data.success) {
-            const jobs = jobsRes.data.data.recommendations || [];
-            setJobRecommendations(jobs);
+        // 3. Fetch job recommendations (rec_pekerjaan) if not provided by bundle
+        if (jobRecs.length > 0) {
+          setJobRecommendations(jobRecs);
+        } else {
+          try {
+            const jobsRes = await recPekerjaanAPI.getByRecId(recId);
+            if (jobsRes.data.success) {
+              const jobs = jobsRes.data.data.recommendations || [];
+              setJobRecommendations(jobs);
+            }
+          } catch (jobErr) {
+            console.warn('Error fetching jobs:', jobErr);
+            setJobRecommendations([]);
           }
-        } catch (jobErr) {
-          console.warn('Error fetching jobs:', jobErr);
-          setJobRecommendations([]);
         }
 
-        // 4. Fetch skill recommendations (rec_skillup)
-        try {
-          const skillsRes = await recSkillupAPI.getByRecId(recId);
-          if (skillsRes.data.success) {
-            const skills = skillsRes.data.data.recommendations || [];
-            setSkillRecommendations(skills);
+        // 4. Fetch skill recommendations (rec_skillup) if not provided by bundle
+        if (skillRecs.length > 0) {
+          setSkillRecommendations(skillRecs);
+        } else {
+          try {
+            const skillsRes = await recSkillupAPI.getByRecId(recId);
+            if (skillsRes.data.success) {
+              const skills = skillsRes.data.data.recommendations || [];
+              setSkillRecommendations(skills);
+            }
+          } catch (skillErr) {
+            console.warn('Error fetching skills:', skillErr);
+            setSkillRecommendations([]);
           }
-        } catch (skillErr) {
-          console.warn('Error fetching skills:', skillErr);
-          setSkillRecommendations([]);
         }
 
         setError('');
+
+        // 5. Try fetch AI analysis (only when user just submitted assessment)
+        try {
+          const fromRecentAssessment = typeof window !== 'undefined' && sessionStorage.getItem('assessment_submitted') === 'true';
+          if (fromRecentAssessment) {
+            const statusRes = await assessmentAPI.checkStatus();
+            const completed = statusRes?.data?.data?.is_completed;
+            const status = statusRes?.data?.data?.ai_status;
+            if (status) setAiStatus(status);
+            if (completed) {
+              try {
+                const res = await assessmentAPI.getResults();
+                if (res.data?.success && res.data.data?.ai_analysis) {
+                  setProfile(prev => ({ ...(prev || {}), ai_insight: res.data.data.ai_analysis }));
+                }
+                sessionStorage.removeItem('assessment_submitted');
+              } catch (resErr) {
+                // ignore 404 from results
+              }
+            }
+          }
+        } catch (_) {
+          // ignore status errors
+        }
       } catch (err) {
         console.error('Error in fetchAll:', err);
-        setError(err.message || 'Gagal load profile');
+        // Fallback ke data lokal jika 401/403 atau network error
+        const status = err?.response?.status;
+        if (status === 401 || status === 403 || isLocalRec) {
+          try {
+            const saved = typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}') : {};
+            if (saved?.personalizedRecord) {
+              setProfile(saved.personalizedRecord);
+              const fallbackName = resolveUserName(saved.personalizedRecord?.user || saved.personalizedRecord?.user_id, saved.personalizedRecord?.user_id);
+              setUser({ name: fallbackName || 'Pengguna' });
+              setJobRecommendations([]);
+              setSkillRecommendations([]);
+              setError('');
+            } else {
+              setError(err.message || 'Gagal load profile');
+            }
+          } catch (e) {
+            setError(err.message || 'Gagal load profile');
+          }
+        } else {
+          setError(err.message || 'Gagal load profile');
+        }
       } finally {
         setLoading(false);
       }
@@ -108,8 +227,14 @@ export function usePersonalizedProfile() {
     // Top strengths
     strengths: profile ? parseStrengths(profile.strength) : [],
 
-    // Skill gaps dengan priority
-    skillGaps: profile ? parseSkillGaps(profile.skill_gap) : [],
+    // Skill gaps dengan priority (fallback synth jika kosong)
+    skillGaps: (() => {
+      if (!profile) return [];
+      const parsed = parseSkillGaps(profile.skill_gap);
+      if (parsed && parsed.length > 0) return parsed;
+      const strengthParsed = parseStrengths(profile.strength);
+      return synthesizeSkillGaps(strengthParsed);
+    })(),
 
     // Formatted job recommendations
     formattedJobs: formatJobRecommendations(jobRecommendations),
@@ -117,8 +242,16 @@ export function usePersonalizedProfile() {
     // Formatted skill recommendations
     formattedSkills: formatSkillRecommendations(skillRecommendations),
 
-    // AI analysis placeholder (null sekarang, akan di-populate oleh AI nanti)
-    aiInsight: null,
+    // AI analysis (filled from backend if available)
+    aiInsight: (() => {
+      if (!profile) return null;
+      return (
+        profile.ai_insight ||
+        profile.ai_summary ||
+        profile.ai_analysis ||
+        null
+      );
+    })(),
 
     // Next steps recommendation
     nextSteps: profile ? generateNextSteps(profile) : []
@@ -130,6 +263,7 @@ export function usePersonalizedProfile() {
     recId,
     loading,
     error,
+    aiStatus,
     // Raw data
     jobRecommendations,
     skillRecommendations,
@@ -141,6 +275,22 @@ export function usePersonalizedProfile() {
 // ============================================
 // PHASE 1: LOGIC-BASED HELPERS
 // ============================================
+
+// Mengambil nama pengguna dari berbagai kemungkinan field
+function resolveUserName(userObjOrString, fallback) {
+  if (typeof userObjOrString === 'string') return userObjOrString;
+  if (!userObjOrString || typeof userObjOrString !== 'object') {
+    return typeof fallback === 'string' ? fallback : 'Pengguna';
+  }
+  const candidates = [
+    userObjOrString.name,
+    userObjOrString.full_name,
+    userObjOrString.nama,
+    userObjOrString.username,
+    typeof fallback === 'string' ? fallback : null
+  ].filter(Boolean);
+  return candidates[0] || 'Pengguna';
+}
 
 function extractRoleFit(roleFitStr) {
   if (!roleFitStr) return 0;
@@ -314,6 +464,21 @@ function generateNextSteps(profile) {
   }
 
   return steps;
+}
+
+// Generate synthetic skill gaps when backend has no data
+function synthesizeSkillGaps(strengthsObj) {
+  const top = strengthsObj?.topThree || [];
+  const traits = strengthsObj?.traits || {};
+  const candidates = [
+    { name: 'Leadership Communication', trait: top[0] || 'Communication', priority: 4 },
+    { name: 'Problem Solving', trait: top[1] || 'Analysis', priority: 3 },
+    { name: 'Stakeholder Management', trait: top[2] || 'Collaboration', priority: 3 },
+  ];
+  return candidates.map(c => ({
+    ...c,
+    priorityLabel: getPriorityLabel(c.priority)
+  }));
 }
 
 // ============================================

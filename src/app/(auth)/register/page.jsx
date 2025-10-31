@@ -25,7 +25,7 @@ const Separator = () => (
   </div>
 );
 
-const RegisterPage = () => {
+export default function RegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
@@ -90,7 +90,7 @@ const RegisterPage = () => {
   };
 
   const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl: '/skill-match' });
+    signIn('google', { callbackUrl: '/personalized' });
   };
 
     return (
@@ -228,5 +228,3 @@ const RegisterPage = () => {
     </div>
   );
 };
-
-export default RegisterPage;

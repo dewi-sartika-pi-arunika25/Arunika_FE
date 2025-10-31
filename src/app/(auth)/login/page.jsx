@@ -31,7 +31,7 @@ const Separator = () => (
   </div>
 );
 
-const LoginPage = () => {
+export default function LoginPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
@@ -76,7 +76,7 @@ const LoginPage = () => {
   };
 
   const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/skill-match" });
+    signIn("google", { callbackUrl: "/personalized" });
   };
 
   return (
@@ -182,5 +182,3 @@ const LoginPage = () => {
     </div>
   );
 };
-
-export default LoginPage;

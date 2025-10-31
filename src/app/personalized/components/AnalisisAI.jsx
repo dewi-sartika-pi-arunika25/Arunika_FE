@@ -1,6 +1,7 @@
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
+import { assessmentAPI } from "@/lib/api";
 import {
   Briefcase,
   Target,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { useState } from "react";
 
 
 export default function AnalisisAI() {
@@ -28,7 +30,18 @@ export default function AnalisisAI() {
     skillGaps,
     nextSteps,
     formattedJobs,
+    aiStatus,
   } = usePersonalizedProfile();
+
+  const [expanded, setExpanded] = useState({
+    personality: false,
+    jobfit: false,
+    development: false,
+    next: false
+  });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   if (loading) {
     return (
@@ -110,6 +123,120 @@ export default function AnalisisAI() {
           </motion.div>
         ))}
       </div>
+
+      {/* === AI STATUS INDICATOR === */}
+      {(!profile?.ai_insight && aiStatus && aiStatus !== 'completed') && (
+        <Card className="bg-yellow-50 border border-yellow-200">
+          <CardContent className="p-4 text-sm text-yellow-900 flex items-center gap-2">
+            <Loader className="h-4 w-4 animate-spin" />
+            AI sedang memproses analisis Anda. Halaman ini akan menampilkan hasil begitu siap.
+          </CardContent>
+        </Card>
+      )}
+
+      {/* === MANUAL REFRESH / TRIGGER AI === */}
+      {(!profile?.ai_insight || aiStatus === 'failed') && (
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={refreshing || aiStatus === 'pending'}
+            onClick={async () => {
+              try {
+                setRefreshing(true);
+                await assessmentAPI.refreshAIAnalysis();
+              } catch (_) {
+                // ignore
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+          >
+            {refreshing ? 'Memulai ulang…' : 'Regenerasi Analisis AI'}
+          </Button>
+          {aiStatus && (
+            <span className="text-xs text-gray-500">Status: {aiStatus}</span>
+          )}
+        </div>
+      )}
+
+      {/* === AI ANALYSIS (from backend) === */}
+      {profile?.ai_insight && (
+        <Card className="bg-[#FFFDF5] border border-[#E4B200]/30 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-[#FF8C00]" />
+              Analisis AI
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-[#2C2C2C]">
+            {typeof profile.ai_insight === 'object' ? (
+              <div className="space-y-4">
+                {profile.ai_insight.personality_summary && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Ringkasan Kepribadian</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('personality')}>
+                        {expanded.personality ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.personality && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap">
+                        {profile.ai_insight.personality_summary}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {profile.ai_insight.job_fit_analysis && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Analisis Job Fit</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('jobfit')}>
+                        {expanded.jobfit ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.jobfit && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap">
+                        {profile.ai_insight.job_fit_analysis}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {profile.ai_insight.development_areas && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Area Pengembangan</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('development')}>
+                        {expanded.development ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.development && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap">
+                        {profile.ai_insight.development_areas}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {profile.ai_insight.next_steps && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Langkah Selanjutnya</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('next')}>
+                        {expanded.next ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.next && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap">
+                        {profile.ai_insight.next_steps}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-700">{String(profile.ai_insight)}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* === ANALISIS AI (DARI AnalisisAI.jsx) === */}
       {strengths.topThree && strengths.topThree.length > 0 && (
