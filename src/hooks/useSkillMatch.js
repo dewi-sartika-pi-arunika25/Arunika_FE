@@ -1,7 +1,7 @@
 // hooks/useSkillMatch.js
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { assessmentAPI, personalizedAPI, recPekerjaanAPI, pekerjaanAPI } from '@/lib/api';
+import { assessmentAPI, personalizedAPI, recPekerjaanAPI, pekerjaanAPI, skillQuestionsAPI } from '@/lib/api';
 import {
   computeScore,
   computeFit,
@@ -33,13 +33,23 @@ export function useSkillMatch(roleCategory) {
     const loadQuestions = async () => {
       try {
         console.log('Loading questions from backend (balanced DISC + RIASEC)');
-        const res = await assessmentAPI.generateQuestions();
+        let res;
+        try {
+          res = await assessmentAPI.generateQuestions();
+        } catch (e) {
+          // Fallback to deprecated questions endpoint if assessment route not found
+          try {
+            res = await skillQuestionsAPI.getAll(1, 12);
+          } catch (_) {
+            throw e;
+          }
+        }
         console.log('API Response:', res);
         console.log('API Response data:', res.data);
 
         if (res.data.success) {
           // Support berbagai struktur response dari backend
-          const raw = res.data.data?.questions || res.data.questions || [];
+          const raw = res.data.data?.questions || res.data.data?.items || res.data.questions || res.data?.data || [];
           const normalized = (Array.isArray(raw) ? raw : []).map((q, idx) => {
             const backendId = q.id ?? q._id ?? q.question_id ?? idx;
             return {
