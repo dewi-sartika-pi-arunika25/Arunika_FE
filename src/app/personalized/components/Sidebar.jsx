@@ -5,10 +5,15 @@ import { Home, Brain, Target, BarChart3, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
+import { useAuthStore } from "@/lib/store/auth";
 
 export default function Sidebar({ activeMenu, setActiveMenu, userProfile = {}, onEditProfile }) {
   const { user } = usePersonalizedProfile();
-  const displayName = user?.name || userProfile.name || "Pengguna";
+  const authStore = useAuthStore();
+  
+  // ✅ Get name from auth store (user.name atau profile.name dari login)
+  const authUserName = authStore.user?.user_metadata?.name || authStore.user?.name || authStore.profile?.name;
+  const displayName = authUserName || user?.name || userProfile.name || "Pengguna";
   const initials = (displayName?.match(/\b\w/g) || []).slice(0,2).join('').toUpperCase() || userProfile.initials || "US";
   const photo = userProfile.photo;
   const menuItems = [
@@ -19,7 +24,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, userProfile = {}, o
   ];
 
   return (
-    <aside className="sticky top-0 h-screen w-64 bg-gradient-to-b from-yellow-50 to-yellow-100 flex flex-col justify-between shadow-sm">
+    <aside className="hidden lg:flex sticky top-0 h-screen w-64 bg-gradient-to-b from-yellow-50 to-yellow-100 flex-col justify-between shadow-sm">
       <div>
         {/* Logo */}
         <div className="p-6 text-left">

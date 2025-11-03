@@ -1,7 +1,6 @@
 "use client";
-import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
+import { useDashboardLogic } from "@/hooks/useDashboardLogic";
 import {
   Loader,
   Target,
@@ -27,122 +26,37 @@ import {
   XAxis,
   YAxis,
   Legend,
+  CartesianGrid,
 } from "recharts";
 
-export default function DashboardContent() {
+export default function DashboardContent({ filters = null }) {
+  // ✅ Semua logic dipindahkan ke useDashboardLogic hook
   const {
     profile,
-    user,
+    userName,
     loading,
     error,
-    roleFit,
-    summaryMetrics,
-    strengths,
+    roleFitInfo,
+    recommendedRole,
+    pieData,
+    radarData,
+    skillGapData,
+    topStrengths,
+    competenceLevel,
+    levelSkillGap,
+    roleDetail,
+    workStyleText,
+    jobData,
     nextSteps,
-    formattedJobs,
-    skillGaps,
-  } = usePersonalizedProfile();
+    chartColors,
+    pct,
+  } = useDashboardLogic();
 
-  // === 🧠 Semua hook harus dipanggil sebelum kondisi render ===
-  const userName = user?.name || "Pengguna Arunika";
-
-  const pieData = useMemo(() => {
-    const value = Math.round(roleFit ?? 0);
-    return [
-      { name: "Role Fit", value },
-      { name: "Gap", value: 100 - value },
-    ];
-  }, [roleFit]);
-
-  const radarData = useMemo(() => {
-    const mapDimensionToName = (key) => {
-      if (!key) return key;
-      const k = String(key).trim().toUpperCase();
-      const discMap = { D: 'Dominance', I: 'Influence', S: 'Steadiness', C: 'Conscientiousness' };
-      const riasecMap = {
-        R: 'Realistic', I2: 'Investigative', A: 'Artistic', S2: 'Social', E: 'Enterprising', C2: 'Conventional'
-      };
-      // Disambiguate keys: if topThree contains single letters, map DISC; if RIASEC letters detected, map accordingly
-      if (discMap[k]) return discMap[k];
-      if (riasecMap[k]) return riasecMap[k];
-      // If already a readable name, just return it
-      return key;
-    };
-
-    const subjects = strengths?.topThree || [];
-    return subjects.map((s, i) => ({
-      subject: mapDimensionToName(s),
-      A: Math.max(35, 95 - i * 12),
-    }));
-  }, [strengths]);
-
-  const dimensionToName = (key) => {
-    if (!key) return key;
-    const k = String(key).trim().toUpperCase();
-    const discMap = { D: 'Dominance', I: 'Influence', S: 'Steadiness', C: 'Conscientiousness' };
-    return discMap[k] || key;
-  };
-
-  const jobData = useMemo(() => {
-    return (
-      formattedJobs?.slice(0, 6).map((j) => ({
-        name: j.role.length > 18 ? j.role.slice(0, 18) + "..." : j.role,
-        match: j.match,
-        badge: j.badge,
-      })) || []
-    );
-  }, [formattedJobs]);
-
-  const skillGapData = useMemo(() => {
-    return (
-      skillGaps?.map((g) => ({
-        skill: g.name,
-        gap: g.gapPercent ?? 0,
-        target: g.targetPercent ?? (100 - (g.gapPercent ?? 0)),
-      })) || []
-    );
-  }, [skillGaps]);
-
-  const levelCompetence = useMemo(() => {
-    const m =
-      summaryMetrics?.find((x) =>
-        ["kompeten", "kompetensi", "competency", "level"].some((k) =>
-          x.title?.toLowerCase().includes(k)
-        )
-      )?.value ?? null;
-
-    if (typeof m === "number") return Math.round(m);
-    if (typeof m === "string") {
-      const n = parseFloat(m.replace("%", "").trim());
-      if (!Number.isNaN(n)) return Math.round(n);
-    }
-
-    if (radarData.length > 0) {
-      const avg = Math.round(
-        radarData.reduce((s, r) => s + (r.A || 0), 0) / radarData.length
-      );
-      return avg;
-    }
-    return 72;
-  }, [summaryMetrics, radarData]);
-
-  const levelSkillGap = useMemo(() => {
-    if (skillGapData.length > 0) {
-      const avg = Math.round(
-        skillGapData.reduce((s, r) => s + (r.gap || 0), 0) /
-          skillGapData.length
-      );
-      return avg;
-    }
-    return Math.max(0, Math.min(100, 100 - Math.round(levelCompetence * 0.9)));
-  }, [skillGapData, levelCompetence]);
-
-  const roleDetail =
-    profile?.roleDescription ||
-    "Role ini menggambarkan kombinasi unik antara kemampuan analisis, komunikasi, dan kepemimpinan. Kamu cenderung mengelola proses secara efisien sekaligus menginspirasi tim menuju tujuan bersama.";
-
-  const COLORS = ["#E4B200", "#FFE89C"];
-  const pct = (n) => `${Math.round(n ?? 0)}%`;
+  // Apply filters jika tersedia
+  const filteredJobs = filters ? filters.filterJobs(jobData) : jobData;
+  const filteredSkillGaps = filters ? filters.filterSkillGaps(skillGapData) : skillGapData;
+  const filteredNextSteps = filters ? filters.filterNextSteps(nextSteps) : nextSteps;
+  const filteredStrengths = filters ? filters.filterStrengths(topStrengths) : topStrengths;
 
   // === Kondisi loading & error setelah semua hook ===
   if (loading) {
@@ -150,7 +64,7 @@ export default function DashboardContent() {
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
         <Card className="w-full max-w-md bg-[#FFFDF5] border border-[#E4B200]/40 shadow-md">
           <CardContent className="p-8 text-center">
-            <Loader className="h-12 w-12 animate-spin mx-auto mb-4 text-[#E4B200]" />
+            <Loader className="h-12 w-12 animate-spin mx-auto mb-4" style={{ color: '#E4B200' }} />
             <p className="text-gray-600">Memuat dashboard...</p>
           </CardContent>
         </Card>
@@ -176,62 +90,82 @@ export default function DashboardContent() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45 }}
-      className="p-8 pt-6 space-y-6"
+      className="p-4 sm:p-6 lg:p-8 pt-4 sm:pt-6 space-y-4 sm:space-y-6"
     >
       {/* ==== TOP SUMMARY ==== */}
-      <div className="grid grid-cols-12 gap-4 items-center">
-        <div className="col-span-8">
-          <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-sm">
-            <CardContent className="flex items-center justify-between gap-4">
+      <div className="space-y-4">
+        {/* Welcome Section */}
+        <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-sm">
+          <CardContent className="p-4 lg:p-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-[#2C2C2C]">Ringkasan Cepat</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Selamat datang, <span className="font-medium">{userName}</span>. Berikut ringkasan
+                <h3 className="text-xl font-semibold text-[#2C2C2C] mb-1">Ringkasan Cepat</h3>
+                <p className="text-sm text-gray-600">
+                  Selamat datang, <span className="font-medium text-[#E4B200]">{userName}</span>. Berikut ringkasan
                   metrik utama berdasarkan analisis AI.
                 </p>
               </div>
+              <div className="flex gap-3">
+                <button className="px-4 py-2 rounded-xl text-white font-semibold shadow-sm hover:shadow-md transition-shadow" style={{ backgroundColor: '#E4B200' }}>
+                  Take Action
+                </button>
+                <button className="px-4 py-2 rounded-xl border border-[#E4B200] text-[#2C2C2C] hover:bg-[#FFF6DC] transition-colors">
+                  Export
+                </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-              <div className="flex items-center gap-4">
-                {[
-                  { title: "Role Fit", value: pct(roleFit), color: "#E4B200" },
-                  { title: "Level Kompetensi", value: pct(levelCompetence), color: "#E4B200" },
-                  { title: "Level Skill Gap", value: pct(levelSkillGap), color: "#FF8C00" },
-                ].map((item, i) => (
-                  <div
+        {/* Metrics Grid - Redesign dengan icon dan layout lebih baik */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { title: "Role Fit", value: pct(roleFitInfo.fit || roleFit), color: "#E4B200", icon: Target, bgGradient: "from-yellow-50 to-yellow-100" },
+            { title: "Level Kompetensi", value: competenceLevel, color: "#E4B200", icon: TrendingUp, bgGradient: "from-green-50 to-green-100" },
+            { title: "Skill Gap", value: pct(levelSkillGap), color: "#FF8C00", icon: BarChart3, bgGradient: "from-orange-50 to-orange-100" },
+            { 
+              title: "Role Cocok", 
+              value: recommendedRole === "Frontend Developer" ? "Frontend" : 
+                     recommendedRole === "Backend Developer" ? "Backend" :
+                     recommendedRole === "Project Manager" ? "PM" :
+                     recommendedRole === "UI/UX Designer" ? "UI/UX" : recommendedRole, 
+              color: "#E4B200",
+              icon: Sparkles,
+              bgGradient: "from-blue-50 to-blue-100"
+            },
+          ].map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <motion.div
                     key={i}
-                    className="p-3 rounded-xl bg-white shadow-inner min-w-[140px] text-center"
-                  >
-                    <div className="text-xs text-gray-500">{item.title}</div>
-                    <div className="text-2xl font-bold" style={{ color: item.color }}>
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className={`bg-gradient-to-br ${item.bgGradient} border border-[#E4B200]/30 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <Icon size={20} className="text-gray-600" />
+                  <div className="text-right">
+                    <div className="text-xs text-gray-600 mb-1">{item.title}</div>
+                    <div className="text-2xl lg:text-3xl font-bold" style={{ color: item.color }}>
                       {item.value}
                     </div>
                   </div>
-                ))}
               </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="col-span-4">
-          <div className="flex gap-3 justify-end">
-            <button className="px-4 py-2 rounded-xl bg-[#E4B200] text-white font-semibold shadow-sm">
-              Take Action
-            </button>
-            <button className="px-4 py-2 rounded-xl border border-[#E4B200] text-[#2C2C2C]">
-              Export
-            </button>
-          </div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
       {/* ==== MAIN GRID ==== */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
         {/* Role Fit */}
         <motion.div
           layout
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="col-span-4 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
+          className="col-span-12 lg:col-span-3 bg-white rounded-2xl border border-[#E4B200]/20 p-4 pr-5 shadow-sm"
         >
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold text-[#2C2C2C] flex items-center gap-2">
@@ -241,19 +175,19 @@ export default function DashboardContent() {
             <div className="text-sm text-gray-600">Kesiapan</div>
           </div>
 
-          <div className="w-full" style={{ height: 210, minWidth: 280 }}>
-            <ResponsiveContainer width="100%" height={210}>
+          <div className="w-full flex items-center justify-center" style={{ height: 180 }}>
+            <ResponsiveContainer width="100%" height={180}>
               <RePieChart>
                 <Pie
                   data={pieData}
                   dataKey="value"
                   nameKey="name"
-                  innerRadius={52}
-                  outerRadius={86}
-                  paddingAngle={3}
+                  innerRadius={42}
+                  outerRadius={70}
+                  paddingAngle={2}
                 >
                   {pieData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={i} fill={chartColors[i % chartColors.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -261,10 +195,10 @@ export default function DashboardContent() {
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-3 flex justify-between items-center">
+          <div className="mt-2 flex justify-between items-center">
             <div className="text-sm text-gray-600">Keterangan:</div>
             <div className="flex items-center gap-3">
-              {COLORS.map((c, i) => (
+              {chartColors.map((c, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c }} />
                   <span className="text-sm text-gray-700">
@@ -281,7 +215,7 @@ export default function DashboardContent() {
           layout
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="col-span-5 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
+          className="col-span-12 lg:col-span-5 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
         >
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold text-[#2C2C2C] flex items-center gap-2">
@@ -297,10 +231,17 @@ export default function DashboardContent() {
                 <ResponsiveContainer width="100%" height={176}>
                   <RadarChart data={radarData}>
                     <PolarGrid />
-                    <PolarAngleAxis dataKey="subject" />
-                    <PolarRadiusAxis domain={[0, 100]} />
+                    <PolarAngleAxis 
+                      dataKey="subject" 
+                      tick={{ fontSize: 12, fontWeight: 'bold' }}
+                    />
+                    <PolarRadiusAxis domain={[0, 100]} hide />
                     <Radar dataKey="A" stroke="#E4B200" fill="#FFD84D" fillOpacity={0.6} />
-                    <Tooltip />
+                    <Tooltip 
+                      formatter={(value) => [`${Math.round(value)}%`, "Skor"]}
+                      labelFormatter={(label) => radarData.find(r => r.subject === label)?.fullName || label}
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #E4B200' }}
+                    />
                   </RadarChart>
                 </ResponsiveContainer>
               ) : (
@@ -311,153 +252,281 @@ export default function DashboardContent() {
             </div>
 
             <div className="col-span-6 space-y-3">
-              {(strengths?.topThree?.length > 0
-                ? strengths.topThree
-                : radarData.map((r) => r.subject)
-              ).map((s, idx) => {
-                const score =
-                  strengths?.scores?.[s] ??
-                  (radarData?.[idx]?.A ?? Math.max(40, 90 - idx * 12));
-                return (
+              {filteredStrengths.length === 0 ? (
+                <div className="text-sm text-gray-500 text-center py-4">
+                  {topStrengths.length === 0 ? "Tidak ada data kekuatan." : "Tidak ada hasil yang cocok dengan filter."}
+                </div>
+              ) : (
+                filteredStrengths.map((strength, idx) => (
                   <motion.div
-                    key={s + idx}
+                    key={strength.code + idx}
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.05 * idx }}
                     className="p-3 rounded-lg border border-[#F3E7B7] bg-[#FFFDF5]"
                   >
                     <div className="flex justify-between items-center">
-                      <div>
-                        <div className="text-sm font-semibold text-[#2C2C2C]">{dimensionToName(s)}</div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {idx === 0 ? "Kekuatan utama" : "Kekuatan"}
-                        </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-semibold text-[#2C2C2C]">{strength.name}</div>
                       </div>
-                      <div className="text-sm font-bold text-[#E4B200]">{pct(score)}</div>
+                      <div className="text-sm font-bold text-[#E4B200] ml-2">{pct(strength.score)}</div>
                     </div>
                     <div className="mt-2 h-2 bg-[#FFF6DC] rounded-full overflow-hidden">
                       <div
-                        className="h-full rounded-full"
+                        className="h-full rounded-full transition-all duration-500"
                         style={{
-                          width: `${Math.min(100, Math.max(0, score))}%`,
+                          width: `${Math.min(100, Math.max(0, strength.score))}%`,
                           background: "linear-gradient(90deg,#FFD84D,#E4B200)",
                         }}
                       />
                     </div>
                   </motion.div>
-                );
-              })}
+                ))
+              )}
             </div>
           </div>
         </motion.div>
 
-        {/* Skill Gap */}
+        {/* Skill Gap - Sekarang di sebelah Strengths */}
         <motion.div
           layout
-          className="col-span-3 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="col-span-12 lg:col-span-4 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
         >
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold text-[#2C2C2C] flex items-center gap-2">
               <TrendingUp size={18} className="text-[#E4B200]" />
-              Skill Gap & Pengembangan
+              Skill Gap & Pengembangan 
+              {filteredSkillGaps.length !== skillGapData.length && ` (${filteredSkillGaps.length}/${skillGapData.length})`}
             </h4>
             <div className="text-sm text-gray-600">Rata-rata: {pct(levelSkillGap)}</div>
           </div>
 
-          <div style={{ height: 220, minWidth: 280 }}>
-            {skillGapData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={skillGapData} layout="vertical" margin={{ left: 12 }}>
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="skill" type="category" width={120} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="gap" name="Saat Ini" fill="#FFE89C" />
-                  <Bar dataKey="target" name="Target" fill="#E4B200" />
+          <div style={{ height: 240, width: '100%' }}>
+            {filteredSkillGaps && filteredSkillGaps.length > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart 
+                  data={filteredSkillGaps} 
+                  layout="vertical"
+                  margin={{ top: 5, right: 20, left: 25, bottom: 40 }}
+                  barCategoryGap="20%"
+                  barGap={4}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                  <XAxis 
+                    type="number" 
+                    domain={[0, 100]}
+                    tick={{ fontSize: 10, fill: '#6B7280' }}
+                    tickFormatter={(value) => `${value}%`}
+                    stroke="#D1D5DB"
+                  />
+                  <YAxis 
+                    dataKey="skill" 
+                    type="category"
+                    width={80}
+                    tick={{ fontSize: 11, fill: '#374151', fontWeight: 500 }}
+                    interval={0}
+                    stroke="#D1D5DB"
+                  />
+                  <Tooltip 
+                    formatter={(value, name) => [`${Math.round(value)}%`, name === "gap" ? "Saat Ini" : "Target"]}
+                  labelFormatter={(label) => {
+                    const item = filteredSkillGaps.find(d => d.skill === label);
+                    return item?.skillFull || label;
+                  }}
+                    labelStyle={{ fontWeight: 'bold', marginBottom: '4px', color: '#1F2937' }}
+                    contentStyle={{ 
+                      borderRadius: '8px', 
+                      border: '1px solid #E4B200',
+                      backgroundColor: '#FFFDF5',
+                      padding: '8px 12px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '12px', fontSize: '11px', color: '#4B5563' }}
+                    iconType="rect"
+                    iconSize={10}
+                    align="right"
+                    verticalAlign="bottom"
+                  />
+                  <Bar 
+                    dataKey="gap" 
+                    name="Saat Ini" 
+                    fill="#FFE89C"
+                    radius={[0, 6, 6, 0]}
+                    barSize={20}
+                    isAnimationActive={true}
+                  />
+                  <Bar 
+                    dataKey="target" 
+                    name="Target" 
+                    fill="#E4B200"
+                    radius={[0, 6, 6, 0]}
+                    barSize={20}
+                    isAnimationActive={true}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={(
-                  (strengths?.topThree || []).slice(0, 3).map((s, i) => ({
-                    skill: s,
-                    gap: 20 + i * 10,
-                    target: 60 - i * 5
-                  }))
-                )} layout="vertical" margin={{ left: 12 }}>
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="skill" type="category" width={120} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="gap" name="Saat Ini" fill="#FFE89C" />
-                  <Bar dataKey="target" name="Target" fill="#E4B200" />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                {skillGapData && skillGapData.length > 0 
+                  ? "Tidak ada hasil yang cocok dengan filter." 
+                  : "Data skill gap belum tersedia"}
+              </div>
             )}
           </div>
         </motion.div>
 
-        {/* Role Fit Detail */}
+        {/* Role Fit Detail & Rekomendasi Pengembangan */}
         <motion.div
           layout
-          className="col-span-8 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
+          className="col-span-12 lg:col-span-8 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <h4 className="font-semibold text-[#2C2C2C] flex items-center gap-2">
               <Target size={18} className="text-[#E4B200]" /> Detail Peran & Potensi
             </h4>
             <div className="text-sm text-gray-600">Rekomendasi pengembangan</div>
           </div>
-          <p className="text-sm text-gray-700 leading-relaxed">{roleDetail}</p>
+
+          <div className="space-y-4">
+            {/* Karir yang Cocok / Role Fit */}
+            {roleFitInfo.role !== "Belum Tersedia" && (
+              <div>
+                <h5 className="text-sm font-semibold text-[#2C2C2C] mb-2 flex items-center gap-2">
+                  <Sparkles size={14} className="text-[#E4B200]" />
+                  Karir yang Cocok
+                </h5>
+                <div className="mb-3">
+                  <div className="inline-block px-3 py-1 bg-gradient-to-r from-[#FFF6DC] to-[#FFE89C] rounded-lg mb-2">
+                    <span className="text-sm font-semibold text-[#2C2C2C]">
+                      {roleFitInfo.role}
+                    </span>
+                  </div>
+                  {roleFitInfo.personality && (
+                    <p className="text-sm text-gray-700 leading-relaxed mt-2">
+                      {roleFitInfo.personality}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Gaya Kerja - Selalu tampilkan jika ada data DISC/RIASEC */}
+            {workStyleText && (
+              <div>
+                <h5 className="text-sm font-semibold text-[#2C2C2C] mb-2 flex items-center gap-2">
+                  <TrendingUp size={14} className="text-[#E4B200]" />
+                  Gaya Kerja
+                </h5>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {workStyleText}
+                </p>
+              </div>
+            )}
+
+            {/* Lingkungan Kerja Ideal */}
+            {roleFitInfo.workEnvironment && (
+              <div>
+                <h5 className="text-sm font-semibold text-[#2C2C2C] mb-2 flex items-center gap-2">
+                  <BarChart3 size={14} className="text-[#E4B200]" />
+                  Lingkungan Kerja Ideal
+                </h5>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {roleFitInfo.workEnvironment}
+                </p>
+              </div>
+            )}
+
+            {/* Strengths */}
+            {roleFitInfo.strengths && roleFitInfo.strengths.length > 0 && (
+              <div>
+                <h5 className="text-sm font-semibold text-[#2C2C2C] mb-2 flex items-center gap-2">
+                  <Target size={14} className="text-[#E4B200]" />
+                  Kekuatan Utama untuk Role Ini
+                </h5>
+                <div className="flex flex-wrap gap-2">
+                  {roleFitInfo.strengths.map((strength, idx) => (
+                    <span
+                      key={idx}
+                      className="px-3 py-1 bg-[#FFF6DC] text-[#2C2C2C] rounded-lg text-xs font-medium border border-[#E4B200]/30"
+                    >
+                      {strength}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </motion.div>
 
         {/* Job Matches */}
-        {jobData.length > 0 && (
+        {filteredJobs.length > 0 && (
           <motion.div
             layout
-            className="col-span-4 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
+            className="col-span-12 lg:col-span-4 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
           >
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-[#2C2C2C] flex items-center gap-2">
                 <BarChart3 size={18} className="text-[#E4B200]" />
-                Lowongan Terbaik
+                Lowongan Terbaik {filteredJobs.length !== jobData.length && `(${filteredJobs.length}/${jobData.length})`}
               </h4>
               <div className="text-xs text-gray-500">Top matches</div>
             </div>
 
             <div className="space-y-2">
-              {jobData.map((j, i) => (
-                <div
+              {filteredJobs.map((j, i) => {
+                // Generate query untuk job search berdasarkan role
+                const roleQuery = j.name.toLowerCase().replace(/\s+/g, '+');
+                const linkedInUrl = `https://www.linkedin.com/jobs/search/?keywords=${roleQuery}`;
+                const jobstreetUrl = `https://www.jobstreet.co.id/id/job-search/${roleQuery}-jobs/`;
+                
+                return (
+                  <motion.div
                   key={j.name + i}
-                  className="flex items-center justify-between p-3 rounded-lg bg-[#FFFDF5] border border-[#F4E8BB]"
-                >
-                  <div>
+                    whileHover={{ scale: 1.02 }}
+                    onClick={() => {
+                      // Navigate ke rec_pekerjaan dengan query parameter
+                      const roleParam = encodeURIComponent(j.name);
+                      const currentUrl = new URL(window.location.href);
+                      const idParam = currentUrl.searchParams.get('id') || '';
+                      window.location.href = `/personalized?id=${idParam}&menu=rekom-pekerjaan&role=${roleParam}`;
+                    }}
+                    className="flex items-center justify-between p-3 rounded-lg bg-[#FFFDF5] border border-[#F4E8BB] cursor-pointer hover:bg-[#FFF6DC] transition-colors"
+                  >
+                    <div className="flex-1">
                     <div className="text-sm font-semibold text-[#2C2C2C]">{j.name}</div>
                     <div className="text-xs text-gray-500">{j.badge || "—"}</div>
                   </div>
-                  <div className="text-right">
+                    <div className="text-right ml-3">
                     <div className="text-sm font-bold text-[#E4B200]">{pct(j.match)}</div>
                     <div className="text-xs text-gray-500">Cocok</div>
                   </div>
-                </div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           </motion.div>
         )}
 
         {/* Next Steps */}
-        {nextSteps?.length > 0 && (
+        {filteredNextSteps?.length > 0 && (
           <motion.div
             layout
             className="col-span-12 bg-white rounded-2xl border border-[#E4B200]/20 p-4 shadow-sm"
           >
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-[#2C2C2C]">Langkah Selanjutnya</h4>
+              <h4 className="font-semibold text-[#2C2C2C]">
+                Langkah Selanjutnya 
+                {filteredNextSteps.length !== nextSteps.length && ` (${filteredNextSteps.length}/${nextSteps.length})`}
+              </h4>
               <div className="text-sm text-gray-600">Action plan</div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-3">
-              {nextSteps.map((step) => (
+              {filteredNextSteps.map((step) => (
                 <div
                   key={step.id}
                   className={`p-3 rounded-xl border-l-4 ${
