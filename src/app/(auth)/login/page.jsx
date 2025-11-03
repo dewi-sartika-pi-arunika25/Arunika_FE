@@ -1,6 +1,6 @@
 "use client";
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -13,10 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession, getSession } from "next-auth/react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
 import { FcGoogle } from "react-icons/fc";
+import { useAuthStore } from "@/lib/store/auth";
 
 const Separator = () => (
   <div className="relative my-4">
@@ -33,9 +34,65 @@ const Separator = () => (
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const login = useAuthStore((state) => state.login);
+  const { data: session, status } = useSession();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Handle OAuth callback and error
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      setError("Terjadi kesalahan saat login dengan Google. Silakan coba lagi.");
+      return;
+    }
+
+    // Handle OAuth success - sync dengan backend dan login ke Zustand
+    const checkOAuthSession = async () => {
+      if (status === 'authenticated' && session) {
+        await handleOAuthSuccess(session);
+      }
+    };
+    
+    checkOAuthSession();
+  }, [searchParams, status]);
+
+  const handleOAuthSuccess = async (session) => {
+    try {
+      // Get tokens from NextAuth session
+      const { accessToken, refreshToken } = session;
+      
+      if (accessToken && refreshToken) {
+        // Tokens sudah ada dari NextAuth, langsung simpan ke Zustand
+        login({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          user: session.user,
+          profile: session.user,
+        });
+        
+        // Redirect ke skill-match
+        router.push('/skill-match');
+      } else {
+        // Tokens belum ada, perlu sync dengan backend
+        const response = await authAPI.register({
+          name: session.user.name || session.user.email,
+          email: session.user.email,
+          password: `oauth_${session.user.id}_${Date.now()}`,
+        });
+
+        if (response?.data?.success) {
+          login(response.data.data);
+          router.push('/skill-match');
+        }
+      }
+    } catch (err) {
+      console.error('OAuth sync error:', err);
+      setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
+    }
+  };
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -51,32 +108,52 @@ export default function LoginPage() {
     try {
       const response = await authAPI.login(formData.email, formData.password);
       if (response?.data?.success) {
-        const { access_token, refresh_token, user } = response.data.data;
+        // ✅ Simpan ke Zustand store (otomatis persist ke localStorage)
+        login(response.data.data);
 
-        // Simpan tokens & user data
-        localStorage.setItem("access_token", access_token);
-        localStorage.setItem("refresh_token", refresh_token);
-        localStorage.setItem("user", JSON.stringify(user));
-        
-        // ✅ TAMBAH: Simpan user_id
-        localStorage.setItem("user_id", user.id);
-        
-        console.log('Login success, saved user_id:', user.id);
-
-        // ✅ UBAH: Redirect ke skill-match dulu, bukan dashboard
+        // Redirect ke skill-match
         router.push("/skill-match");
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
     } catch (err) {
-      setError("Terjadi kesalahan saat login. Silakan coba lagi.");
+      console.error('Login error:', err);
+      // Extract error message with better handling
+      let errorMessage = "Terjadi kesalahan saat login. Silakan coba lagi.";
+      
+      if (err?.response?.data) {
+        // Try multiple error message locations
+        const errorData = err.response.data;
+        errorMessage = errorData?.error?.message || 
+                      errorData?.error || 
+                      errorData?.message || 
+                      errorData?.data?.message ||
+                      (typeof errorData === 'string' ? errorData : errorMessage);
+      } else if (err?.response?.status === 401) {
+        errorMessage = "Email atau kata sandi salah. Silakan coba lagi.";
+      } else if (err?.response?.status === 404) {
+        errorMessage = "Backend tidak dapat diakses. Pastikan server backend berjalan.";
+      } else if (err?.response?.status >= 500) {
+        errorMessage = "Terjadi kesalahan pada server. Silakan coba lagi nanti.";
+      } else if (err?.message) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/personalized" });
+    // ✅ Updated to use /api/nextauth path
+    // Explicitly set basePath to ensure client knows about custom path
+    signIn("google", { 
+      callbackUrl: "/personalized",
+      redirect: true
+    });
   };
 
   return (

@@ -1,6 +1,9 @@
 // src/app/layout.js
 import "./globals.css";
 import { Montserrat } from "next/font/google";
+import ErrorBoundary from "@/components/error/ErrorBoundary";
+import ToastContainer from "@/components/ui/toast";
+import Providers from "./providers";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -25,7 +28,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="id">
       <body className={`${montserrat.className} antialiased`}>
-        {children}
+        <Providers>
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
+          <ToastContainer />
+        </Providers>
       </body>
     </html>
   );

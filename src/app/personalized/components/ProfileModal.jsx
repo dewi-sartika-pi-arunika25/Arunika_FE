@@ -1,12 +1,11 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,82 +18,23 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import Image from "next/image";
+import { useProfileModal } from "@/hooks/useProfileModal";
 
 export default function ProfileModal({ profile, setProfile, open, setOpen }) {
-  
-  const [form, setForm] = useState({
-    photo: profile.photo || "",
-    name: profile.name || "",
-    birthPlace: profile.birthPlace || "",
-    birthDate: profile.birthDate || "",
-    country: profile.country || "",
-    province: profile.province || "",
-    city: profile.city || "",
-    addressDetail: profile.addressDetail || "",
-    job: profile.job || "",
-    experience: profile.experience || "",
-    education: profile.education || "",
-    major: profile.major || "",
-  });
+  // ✅ Semua logic dipindahkan ke useProfileModal hook
+  const {
+    form,
+    provinces,
+    cities,
+    loadingProvinces,
+    loadingCities,
+    handleChange,
+    handlePhotoUpload,
+    handleSave,
+  } = useProfileModal(profile, setProfile, open);
 
-  const [provinces, setProvinces] = useState([]);
-  const [cities, setCities] = useState([]);
-
-  // === AMBIL PROVINSI ===
-  useEffect(() => {
-    const fetchProvinces = async () => {
-      try {
-        const response = await fetch(
-          "https://www.emsifa.com/api-wilayah-indonesia/api/provinces.json"
-        );
-        if (!response.ok) throw new Error("Gagal mengambil data provinsi");
-        const data = await response.json();
-        setProvinces(data);
-      } catch (error) {
-        console.error("Error fetching provinces:", error);
-      }
-    };
-    fetchProvinces();
-  }, []);
-
-  // === AMBIL KOTA SESUAI PROVINSI ===
-  useEffect(() => {
-    const fetchCities = async () => {
-      if (!form.province) {
-        setCities([]);
-        return;
-      }
-      try {
-        const response = await fetch(
-          `https://www.emsifa.com/api-wilayah-indonesia/api/regencies/${form.province}.json`
-        );
-        if (!response.ok) throw new Error("Gagal mengambil data kota");
-        const data = await response.json();
-        setCities(data);
-      } catch (error) {
-        console.error("Error fetching cities:", error);
-      }
-    };
-    fetchCities();
-  }, [form.province]);
-
-  const handleChange = (field, value) => {
-    setForm({ ...form, [field]: value });
-  };
-
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        handleChange("photo", reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSave = () => {
-    setProfile(form);
+  const onSave = () => {
+    handleSave();
     setOpen(false);
   };
 
@@ -332,7 +272,7 @@ export default function ProfileModal({ profile, setProfile, open, setOpen }) {
         {/* FOOTER */}
         <DialogFooter className="mt-6">
           <Button
-            onClick={handleSave}
+            onClick={onSave}
             className="bg-[#FF8C00] hover:bg-[#E67600] text-white rounded-lg"
           >
             Simpan

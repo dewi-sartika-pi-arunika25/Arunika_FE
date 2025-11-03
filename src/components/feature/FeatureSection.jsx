@@ -1,9 +1,7 @@
-// /src/app/components/feature/FeatureSection.jsx
 "use client";
 
 import { motion } from "framer-motion";
-// HAPUS: import FeatureGrid from "./FeatureGrid";
-import FeatureRow from "./FeatureRow"; // <-- GANTI DENGEncAN INI
+import FeatureRows from "./FeatureRow";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 14, filter: "blur(2px)" },
@@ -24,11 +22,9 @@ export default function FeatureSection() {
           whileInView="show"
           viewport={{ once: false, amount: 0.45 }}
           variants={stagger}
-          className="mx-auto text-center" // <-- Teks header sudah rata tengah
+          className="mx-auto text-center"
           aria-labelledby="feature-title"
         >
-          {/* ... (Semua kode 'motion.p' dan 'motion.h2' untuk judul tetap sama) ... */}
-          
           <motion.p
             variants={fadeUp}
             className="mx-auto inline-flex items-center justify-center rounded-full px-3.5 py-1.5 text-[11px] sm:text-xs font-semibold tracking-[0.22em] shadow-sm border"
@@ -67,9 +63,7 @@ export default function FeatureSection() {
           </motion.p>
         </motion.div>
 
-        {/* --- INI BAGIAN YANG BERUBAH --- */}
-        <FeatureRow />
-        
+        <FeatureRows />
       </div>
     </section>
   );
