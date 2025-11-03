@@ -5,11 +5,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { User, Mail, Lock, ArrowRight, Chrome, Home } from 'lucide-react'; 
+import { User, Mail, Lock, ArrowRight, Chrome, Home, Eye, EyeOff } from 'lucide-react'; 
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { authAPI } from '@/lib/api'; // ✅ FIX: sebelumnya '@/app/lib/api'
 import { FcGoogle } from "react-icons/fc";
+import { useAuthStore } from "@/lib/store/auth";
 
 
 const Separator = () => (
@@ -27,6 +28,7 @@ const Separator = () => (
 
 export default function RegisterPage() {
   const router = useRouter();
+  const login = useAuthStore((state) => state.login);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -36,6 +38,8 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -69,12 +73,8 @@ export default function RegisterPage() {
       });
 
       if (response.data.success) {
-        const { access_token, refresh_token, user } = response.data.data;
-
-        // Simpan tokens
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', refresh_token);
-        localStorage.setItem('user', JSON.stringify(user));
+        // ✅ Simpan ke Zustand store (otomatis persist ke localStorage)
+        login(response.data.data);
 
         setSuccess('Pendaftaran berhasil! Anda akan diarahkan ke skillmatch...');
         setTimeout(() => {
@@ -90,6 +90,7 @@ export default function RegisterPage() {
   };
 
   const handleGoogleSignIn = () => {
+    // ✅ Updated to use /api/nextauth path
     signIn('google', { callbackUrl: '/personalized' });
   };
 
@@ -172,36 +173,60 @@ export default function RegisterPage() {
             <div className="grid gap-2">
               <Label htmlFor="password">Kata Sandi</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Minimal 6 karakter"
                   value={formData.password}
                   onChange={handleChange}
                   required
                   minLength={6}
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   disabled={isLoading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  disabled={isLoading}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
 
             <div className="grid gap-2">
               <Label htmlFor="confirmPassword">Konfirmasi Kata Sandi</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                 <Input
                   id="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? "text" : "password"}
                   placeholder="Ketik ulang kata sandi"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   required
                   minLength={6}
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   disabled={isLoading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  disabled={isLoading}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
 

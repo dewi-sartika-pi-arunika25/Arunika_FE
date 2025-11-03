@@ -1,7 +1,10 @@
 // hooks/usePersonalizedProfile.js
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI, usersAPI, assessmentAPI } from '@/lib/api';
+import { personalizedAPI, recommendationsAPI, skillupAPI, usersAPI, assessmentAPI } from '@/lib/api';
+import { logWarning, logError } from '@/lib/utils/logger';
+import { COLORS } from '@/lib/config/constants';
+import { getWithExpiry } from '@/lib/utils/storage';
 
 /**
  * Main hook untuk personalized dashboard
@@ -32,9 +35,61 @@ export function usePersonalizedProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [aiStatus, setAiStatus] = useState('');
+  const [refreshingAI, setRefreshingAI] = useState(false);
 
   // Fetch profile + recommendations
   useEffect(() => {
+    // Check for DISC+RIASEC results first (dari localStorage dengan expiry 24h)
+    if (typeof window !== 'undefined') {
+      const discRiasecResults = getWithExpiry('disc_riasec_results');
+      const assessmentType = getWithExpiry('assessment_type');
+      
+      if (discRiasecResults && assessmentType === 'DISC_RIASEC') {
+        try {
+          const results = discRiasecResults; // Sudah di-parse oleh getWithExpiry
+          // Create profile from DISC+RIASEC results
+          const discProfile = results.discProfile || {};
+          const riasecProfile = results.riasecProfile || {};
+          const recommendations = results.recommendations || [];
+          
+          // Format profile for personalized page
+          const formattedProfile = {
+            role_fit: `DISC: ${discProfile.primary || 'N/A'}/${discProfile.secondary || 'N/A'} | RIASEC: ${riasecProfile.primary || 'N/A'}/${riasecProfile.secondary || 'N/A'}`,
+            level: 'Menengah',
+            gap: `${recommendations.length} rekomendasi pekerjaan`,
+            strength: JSON.stringify({
+              archetype: `DISC ${discProfile.primary || ''}-${discProfile.secondary || ''}`,
+              topThree: [
+                discProfile.primary || 'D',
+                discProfile.secondary || 'I',
+                riasecProfile.primary || 'A'
+              ],
+              traits: {
+                ...discProfile.scores,
+                ...riasecProfile.scores
+              },
+              discProfile,
+              riasecProfile
+            }),
+            skill_gap: JSON.stringify([]),
+            disc_profile: discProfile,
+            riasec_profile: riasecProfile,
+            job_recommendations: recommendations
+          };
+          
+          setProfile(formattedProfile);
+          setUser({ name: 'User' });
+          // Store recommendations in the format expected by formatJobRecommendations
+          setJobRecommendations(recommendations);
+          setError('');
+          setLoading(false);
+          return;
+        } catch (e) {
+          logError('Error parsing DISC+RIASEC results:', e);
+        }
+      }
+    }
+    
     if (!recId) {
       // Fallback ke data lokal jika tersedia
       try {
@@ -83,7 +138,11 @@ export function usePersonalizedProfile() {
             jobRecs = bundleRes.data.data.job_recommendations || [];
             skillRecs = bundleRes.data.data.skill_recommendations || [];
           }
-        } catch (_) {
+        } catch (bundleErr) {
+          // Silently ignore 404s for bundled endpoint - it's optional
+          if (bundleErr.response?.status !== 404) {
+            logWarning('Bundled recommendations endpoint failed:', bundleErr);
+          }
           // fallback to separate calls below
         }
 
@@ -116,7 +175,7 @@ export function usePersonalizedProfile() {
                 setUser({ name });
               }
             } catch (userErr) {
-              console.warn('Gagal fetch user detail, fallback ke user_id:', userErr);
+              logWarning('Gagal fetch user detail, fallback ke user_id:', userErr);
               const name = typeof userId === 'string' ? userId : 'Pengguna';
               setUser({ name });
             }
@@ -125,34 +184,46 @@ export function usePersonalizedProfile() {
           setUser({ name: 'Pengguna' });
         }
 
-        // 3. Fetch job recommendations (rec_pekerjaan) if not provided by bundle
+        // 3. Fetch job recommendations if not provided by bundle
         if (jobRecs.length > 0) {
           setJobRecommendations(jobRecs);
         } else {
           try {
-            const jobsRes = await recPekerjaanAPI.getByRecId(recId);
-            if (jobsRes.data.success) {
-              const jobs = jobsRes.data.data.recommendations || [];
-              setJobRecommendations(jobs);
+            const jobsRes = await recommendationsAPI.getJobRecommendations(recId);
+            // Handle various response structures
+            if (jobsRes.data?.success) {
+              const jobs = jobsRes.data.data?.recommendations || jobsRes.data.data?.data || jobsRes.data.recommendations || [];
+              setJobRecommendations(Array.isArray(jobs) ? jobs : []);
+            } else {
+              setJobRecommendations([]);
             }
           } catch (jobErr) {
-            console.warn('Error fetching jobs:', jobErr);
+            // Silently handle 404s - recommendations might not exist yet
+            if (jobErr.response?.status !== 404) {
+              logWarning('Error fetching jobs:', jobErr);
+            }
             setJobRecommendations([]);
           }
         }
 
-        // 4. Fetch skill recommendations (rec_skillup) if not provided by bundle
+        // 4. Fetch skill recommendations if not provided by bundle
         if (skillRecs.length > 0) {
           setSkillRecommendations(skillRecs);
         } else {
           try {
-            const skillsRes = await recSkillupAPI.getByRecId(recId);
-            if (skillsRes.data.success) {
-              const skills = skillsRes.data.data.recommendations || [];
-              setSkillRecommendations(skills);
+            const skillsRes = await recommendationsAPI.getSkillRecommendations(recId);
+            // Handle various response structures
+            if (skillsRes.data?.success) {
+              const skills = skillsRes.data.data?.recommendations || skillsRes.data.data?.data || skillsRes.data.recommendations || [];
+              setSkillRecommendations(Array.isArray(skills) ? skills : []);
+            } else {
+              setSkillRecommendations([]);
             }
           } catch (skillErr) {
-            console.warn('Error fetching skills:', skillErr);
+            // Silently handle 404s - recommendations might not exist yet
+            if (skillErr.response?.status !== 404) {
+              logWarning('Error fetching skills:', skillErr);
+            }
             setSkillRecommendations([]);
           }
         }
@@ -163,27 +234,49 @@ export function usePersonalizedProfile() {
         try {
           const fromRecentAssessment = typeof window !== 'undefined' && sessionStorage.getItem('assessment_submitted') === 'true';
           if (fromRecentAssessment) {
-            const statusRes = await assessmentAPI.checkStatus();
-            const completed = statusRes?.data?.data?.is_completed;
-            const status = statusRes?.data?.data?.ai_status;
-            if (status) setAiStatus(status);
-            if (completed) {
+            // Poll for AI completion (every 5s, max 24 attempts = 2 minutes)
+            let attempts = 0;
+            const maxAttempts = 24;
+            const pollInterval = setInterval(async () => {
+              attempts += 1;
               try {
-                const res = await assessmentAPI.getResults();
-                if (res.data?.success && res.data.data?.ai_analysis) {
-                  setProfile(prev => ({ ...(prev || {}), ai_insight: res.data.data.ai_analysis }));
+                const statusRes = await assessmentAPI.checkStatus();
+                const completed = statusRes?.data?.data?.is_completed;
+                const failed = statusRes?.data?.data?.is_failed;
+                const status = statusRes?.data?.data?.ai_status;
+                if (status) setAiStatus(status);
+                if (completed) {
+                  try {
+                    const res = await assessmentAPI.getResults();
+                    if (res.data?.success && res.data.data?.ai_analysis) {
+                      setProfile(prev => ({ ...(prev || {}), ai_insight: res.data.data.ai_analysis }));
+                    }
+                    sessionStorage.removeItem('assessment_submitted');
+                    clearInterval(pollInterval);
+                  } catch (resErr) {
+                    logWarning('Failed to fetch AI results:', resErr);
+                  }
+                } else if (failed || status === 'failed') {
+                  setAiStatus('failed');
+                  clearInterval(pollInterval);
+                } else if (attempts >= maxAttempts) {
+                  clearInterval(pollInterval);
+                  setAiStatus('timeout');
                 }
-                sessionStorage.removeItem('assessment_submitted');
-              } catch (resErr) {
-                // ignore 404 from results
+              } catch (pollErr) {
+                logWarning('Poll error:', pollErr);
+                if (attempts >= maxAttempts) {
+                  clearInterval(pollInterval);
+                  setAiStatus('error');
+                }
               }
-            }
+            }, 5000); // Poll every 5 seconds
           }
         } catch (_) {
           // ignore status errors
         }
       } catch (err) {
-        console.error('Error in fetchAll:', err);
+        logError('Error in fetchAll:', err);
         // Fallback ke data lokal jika 401/403 atau network error
         const status = err?.response?.status;
         if (status === 401 || status === 403 || isLocalRec) {
@@ -257,6 +350,63 @@ export function usePersonalizedProfile() {
     nextSteps: profile ? generateNextSteps(profile) : []
   };
 
+  // Function untuk refresh AI analysis (bisa dipanggil dari komponen)
+  const refreshAIAnalysis = async () => {
+    if (!recId || refreshingAI) return;
+    
+    try {
+      setRefreshingAI(true);
+      // Gunakan endpoint personalized yang lebih spesifik
+      await personalizedAPI.refreshAIAnalysis(recId);
+      
+      // Poll untuk hasil baru (sama seperti saat pertama load)
+      let attempts = 0;
+      const maxAttempts = 12; // 1 menit polling
+      const pollInterval = setInterval(async () => {
+        attempts += 1;
+        try {
+          const statusRes = await assessmentAPI.checkStatus();
+          const completed = statusRes?.data?.data?.is_completed;
+          const failed = statusRes?.data?.data?.is_failed;
+          const status = statusRes?.data?.data?.ai_status;
+          
+          if (status) setAiStatus(status);
+          
+          if (completed) {
+            try {
+              const res = await assessmentAPI.getResults();
+              if (res.data?.success && res.data.data?.ai_analysis) {
+                setProfile(prev => ({ ...(prev || {}), ai_insight: res.data.data.ai_analysis }));
+                setAiStatus('completed');
+              }
+              clearInterval(pollInterval);
+            } catch (resErr) {
+              logWarning('Failed to fetch AI results:', resErr);
+            }
+          } else if (failed || status === 'failed') {
+            setAiStatus('failed');
+            clearInterval(pollInterval);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setAiStatus('timeout');
+          }
+        } catch (pollErr) {
+          logWarning('Poll error:', pollErr);
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setAiStatus('error');
+          }
+        }
+      }, 5000);
+      
+    } catch (err) {
+      logError('Error refreshing AI analysis:', err);
+      setAiStatus('error');
+    } finally {
+      setRefreshingAI(false);
+    }
+  };
+
   return {
     profile,
     user, // ✅ ditambahkan agar bisa digunakan di komponen (misal DashboardContent)
@@ -264,6 +414,8 @@ export function usePersonalizedProfile() {
     loading,
     error,
     aiStatus,
+    refreshingAI,
+    refreshAIAnalysis, // ✅ fungsi untuk refresh AI analysis
     // Raw data
     jobRecommendations,
     skillRecommendations,
@@ -306,14 +458,14 @@ function buildMetrics(profile) {
       title: "Role Fit",
       value: `${roleFit}%`,
       icon: "Target",
-      color: "text-[#FF8C00]",
+      color: `text-[${COLORS.PRIMARY}]`,
       benchmark: roleFit >= 75 ? "Excellent" : roleFit >= 55 ? "Good" : "Building"
     },
     {
       title: "Level",
       value: profile.level || "Menengah",
       icon: "TrendingUp",
-      color: "text-[#E4B200]"
+      color: `text-[${COLORS.ACCENT}]`
     },
     {
       title: "Skill Gaps",
@@ -342,7 +494,7 @@ function parseSkillGaps(skillGapStr) {
       }))
       .sort((a, b) => (b.priority || 0) - (a.priority || 0));
   } catch (e) {
-    console.error('Error parsing skill gaps:', e);
+    logError('Error parsing skill gaps:', e);
     return [];
   }
 }
@@ -357,7 +509,7 @@ function parseStrengths(strengthStr) {
       traits: strength.traits || {}
     };
   } catch (e) {
-    console.error('Error parsing strengths:', e);
+    logError('Error parsing strengths:', e);
     return {
       archetype: "The Explorer",
       topThree: [],
@@ -378,6 +530,21 @@ function getPriorityLabel(priority) {
 }
 
 function formatJobRecommendations(jobs) {
+  // Handle DISC+RIASEC format
+  if (jobs.length > 0 && jobs[0].job && typeof jobs[0].job === 'string') {
+    return jobs.map(job => ({
+      id: job.job || `job-${Math.random()}`,
+      role: job.job,
+      bidang: 'IT',
+      description: job.desc || '',
+      requirements: '',
+      link: null,
+      match: job.score || 0,
+      badge: job.label || getBadgeFromMatch(job.score || 0)
+    }));
+  }
+  
+  // Handle legacy format
   return jobs.map(job => ({
     id: job.pekerjaan?.pekerjaan_id,
     role: job.pekerjaan?.nama_pekerjaan,

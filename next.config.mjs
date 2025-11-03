@@ -1,15 +1,9 @@
 /** @type {import('next').NextConfig} */
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+// Note: API proxying handled by app/api/[...catchall]/route.js
+// Rewrites are NOT needed because API routes take priority over rewrites
 
 const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${API_URL}/:path*`
-      }
-    ];
-  }
+  // Configuration can be added here as needed
 };
 
 export default nextConfig;
