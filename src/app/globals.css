@@ -266,3 +266,16 @@
     box-shadow: 0 0 10px color-mix(in oklab, var(--primary) 50%, #000);
   }
 }
+.hero-caret {
+  display: inline-block;
+  margin-left: .06em;
+  animation: caret-blink 1s steps(2, start) infinite;
+  opacity: .8;
+}
+@keyframes caret-blink {
+  0%, 50% { opacity: .8; }
+  51%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-caret { animation: none; }
+}
