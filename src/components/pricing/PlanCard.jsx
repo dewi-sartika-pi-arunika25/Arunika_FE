@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import AnimatedBadge from "./AnimatedBadge";
 
 export default function PlanCard({
   name,
@@ -11,7 +10,7 @@ export default function PlanCard({
   features = [],           // [{ label: string, on: boolean }]
   cta = "Pilih Paket",
   highlighted = false,     // untuk paket Tahunan
-  badge,                   // { label: string, tone?: "free" | "pro" }
+  badge,                   // string | { label: string, tone?: "free" | "pro" }
   maxWidth = "520px",
   hoverGlow = false,       // "orange" | false
 }) {
@@ -19,7 +18,14 @@ export default function PlanCard({
   const primary = "var(--primary)";
   const text = "var(--text)";
 
-  // palet glow oranye agar nyambung
+  // ===== Normalisasi badge =====
+  // Boleh kirim string atau object. Jangan render object mentah!
+  const badgeLabel = typeof badge === "string" ? badge : badge?.label;
+  const badgeTone  = typeof badge === "string"
+    ? (highlighted ? "pro" : "free")
+    : badge?.tone ?? (highlighted ? "pro" : "free");
+
+  // Palet glow oranye agar nyambung
   const glowBg =
     hoverGlow === "orange"
       ? "radial-gradient(40% 38% at 50% 0%, color-mix(in oklab, var(--primary) 18%, transparent), transparent)," +
@@ -30,7 +36,7 @@ export default function PlanCard({
     <motion.div
       onHoverStart={() => setHover(true)}
       onHoverEnd={() => setHover(false)}
-      whileHover={{ y: -4, scale: 1.05 }}
+      whileHover={{ y: -4, scale: 1.03 }}
       transition={{ duration: 0.22, ease: "easeOut" }}
       className="relative h-full w-full rounded-2xl p-[1.5px] group"
       style={{
@@ -52,10 +58,27 @@ export default function PlanCard({
         />
       )}
 
-      {badge?.label && (
-        <div className="absolute -top-3 left-4 z-10">
-          <AnimatedBadge label={badge.label} tone={badge.tone} />
-        </div>
+      {/* BADGE — HANYA render string label, JANGAN object */}
+      {badgeLabel && (
+        <motion.div
+          aria-hidden
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute -top-3 left-4 z-10 rounded-full px-3.5 py-1 text-[11px] font-extrabold tracking-wide backdrop-blur-md border shadow-sm"
+          style={{
+            color: badgeTone === "pro" ? "#fff" : "var(--text)",
+            background:
+              badgeTone === "pro"
+                ? "linear-gradient(90deg, color-mix(in oklab, var(--primary) 92%, black), var(--primary))"
+                : "color-mix(in oklab, var(--accent-3) 60%, transparent)",
+            borderColor:
+              badgeTone === "pro"
+                ? "color-mix(in oklab, var(--primary) 46%, transparent)"
+                : "color-mix(in oklab, var(--accent-2) 42%, transparent)",
+          }}
+        >
+          {badgeLabel}
+        </motion.div>
       )}
 
       <div
