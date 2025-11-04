@@ -6,13 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { User, Mail, Lock, ArrowRight, Chrome, Home, Eye, EyeOff } from 'lucide-react'; 
+import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { authAPI } from '@/lib/api';
+import { authAPI } from '@/lib/api'; // ✅ FIX: sebelumnya '@/app/lib/api'
 import { FcGoogle } from "react-icons/fc";
 import { useAuthStore } from "@/lib/store/auth";
-import { useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
-import { getOAuthRedirectUrl } from "@/lib/utils/oauth";
 
 
 const Separator = () => (
@@ -30,7 +28,6 @@ const Separator = () => (
 
 export default function RegisterPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const login = useAuthStore((state) => state.login);
   const [formData, setFormData] = useState({
     name: '',
@@ -43,63 +40,6 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Handle OAuth callback from backend
-  useEffect(() => {
-    const errorParam = searchParams.get('error');
-    const successParam = searchParams.get('success');
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    const userId = searchParams.get('user_id');
-    const hasAssessment = searchParams.get('has_assessment') === 'true';
-
-    if (errorParam) {
-      setError(decodeURIComponent(errorParam));
-      return;
-    }
-
-    // Handle successful OAuth callback
-    if (successParam === 'true' && accessToken && refreshToken) {
-      handleOAuthCallback(accessToken, refreshToken, userId, hasAssessment);
-    }
-  }, [searchParams]);
-  
-  const handleOAuthCallback = async (accessToken, refreshToken, userId, hasAssessment) => {
-    try {
-      // Save tokens first to Zustand store
-      login({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        user: { id: userId },
-        profile: { user_id: userId },
-      });
-
-      // Try to get user profile from backend (optional)
-      try {
-        const meResponse = await authAPI.me();
-        if (meResponse?.data?.success) {
-          login({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            user: meResponse.data.data.auth_user,
-            profile: meResponse.data.data.profile,
-          });
-        }
-      } catch (profileErr) {
-        console.warn('Failed to fetch profile, using tokens only:', profileErr);
-      }
-
-      // Redirect based on assessment status
-      if (hasAssessment) {
-        router.push('/personalized');
-      } else {
-        router.push('/skill-match');
-      }
-    } catch (err) {
-      console.error('OAuth callback error:', err);
-      setError("Gagal memuat profil. Silakan coba lagi.");
-    }
-  };
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -133,33 +73,87 @@ export default function RegisterPage() {
       });
 
       if (response.data.success) {
+        // ✅ Simpan ke Zustand store (otomatis persist ke localStorage)
         login(response.data.data);
 
-        // Redirect berdasarkan apakah user sudah punya assessment data
-        const hasAssessment = response.data.data?.has_assessment || false;
-        const redirectMessage = hasAssessment 
-          ? 'Pendaftaran berhasil! Anda akan diarahkan ke dashboard...'
-          : 'Pendaftaran berhasil! Anda akan diarahkan ke skill-match...';
-        
-        setSuccess(redirectMessage);
+        setSuccess('Pendaftaran berhasil! Anda akan diarahkan...');
         setTimeout(() => {
-          if (hasAssessment) {
-            router.push('/personalized');
-          } else {
-            router.push('/skill-match');
-          }
+          // Redirect ke skill-match untuk user baru (belum ada assessment)
+          router.push('/skill-match');
         }, 2000);
       }
     } catch (err) {
-      setError(err?.response?.data?.error || 'Pendaftaran gagal. Silakan coba lagi.');
       console.error('Register error:', err);
+      console.error('Error response data:', err?.response?.data);
+      
+      // Extract error message dari berbagai kemungkinan struktur
+      let errorMessage = 'Pendaftaran gagal. Silakan coba lagi.';
+      
+      if (err?.response?.data) {
+        const errorData = err.response.data;
+        
+        // Handle error object dengan keys {code, message, details}
+        // Format: { success: false, error: { code: "...", message: "..." } }
+        if (errorData?.error) {
+          if (typeof errorData.error === 'string') {
+            errorMessage = errorData.error;
+          } else if (typeof errorData.error === 'object') {
+            // Extract message dari error object
+            if (errorData.error.message) {
+              errorMessage = errorData.error.message;
+            } else if (errorData.error.code) {
+              // Use code as fallback if no message
+              errorMessage = errorData.error.code;
+            } else if (errorData.error.details) {
+              // Handle details - bisa string atau object
+              if (typeof errorData.error.details === 'string') {
+                errorMessage = errorData.error.details;
+              } else if (Array.isArray(errorData.error.details)) {
+                errorMessage = errorData.error.details.join(', ');
+              } else if (typeof errorData.error.details === 'object') {
+                errorMessage = Object.values(errorData.error.details).filter(v => typeof v === 'string').join(', ') || errorMessage;
+              }
+            } else {
+              // Fallback: coba extract dari keys yang ada
+              errorMessage = Object.values(errorData.error).find(v => typeof v === 'string') || errorMessage;
+            }
+          }
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        }
+      } else if (err?.response?.status === 400) {
+        errorMessage = 'Data yang dimasukkan tidak valid. Periksa kembali semua field.';
+      } else if (err?.response?.status === 409) {
+        errorMessage = 'Email sudah terdaftar. Gunakan email lain atau login.';
+      } else if (err?.response?.status === 401) {
+        errorMessage = 'Autentikasi gagal. Silakan coba lagi.';
+      } else if (err?.response?.status === 404) {
+        errorMessage = 'Backend tidak dapat diakses. Pastikan server backend berjalan.';
+      } else if (err?.response?.status >= 500) {
+        errorMessage = 'Terjadi kesalahan pada server. Silakan coba lagi nanti.';
+      } else if (err?.message) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
+      // Pastikan errorMessage selalu string (jika masih object, stringify)
+      if (typeof errorMessage !== 'string') {
+        console.warn('Error message is not a string, stringifying:', errorMessage);
+        errorMessage = JSON.stringify(errorMessage);
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = () => {
-    window.location.href = getOAuthRedirectUrl('register');
+    // ✅ Use default NextAuth path (/api/auth)
+    signIn('google', { callbackUrl: '/personalized' });
   };
 
     return (
@@ -320,4 +314,5 @@ export default function RegisterPage() {
       </Card>
     </div>
   );
-};
+}
+

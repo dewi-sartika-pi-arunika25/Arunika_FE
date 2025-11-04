@@ -35,6 +35,32 @@ async function proxyRequest(request, context) {
     // Extract path dari URL (remove /api prefix)
     // Example: /api/assessment/start -> assessment/start
     const urlPath = url.pathname;
+    
+    // ✅ CRITICAL: Skip NextAuth routes
+    // In Next.js, /api/auth/[...nextauth] is MORE SPECIFIC than /api/[...catchall]
+    // So Next.js should route to /api/auth/[...nextauth] FIRST, not catch-all
+    // If we reach here for /api/auth/*, something is wrong with Next.js routing
+    // But let's handle it gracefully by NOT proxying
+    if (urlPath.startsWith('/api/auth/')) {
+      logInfo('[Catch-all] NextAuth route detected - this should not reach catch-all!', urlPath);
+      logInfo('[Catch-all] Next.js should route this to /api/auth/[...nextauth]/route.js');
+      logInfo('[Catch-all] Check if /api/auth/[...nextauth]/route.js exists and is properly configured');
+      
+      // Don't proxy, but also don't return 404 - let Next.js handle it
+      // Actually, if we're here, Next.js routing failed
+      // Return 500 to indicate internal routing error
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'Internal routing error',
+          message: 'NextAuth route should be handled by /api/auth/[...nextauth] but reached catch-all',
+          hint: 'Check Next.js route configuration',
+          timestamp: new Date().toISOString()
+        },
+        { status: 500 }
+      );
+    }
+    
     const path = urlPath.startsWith('/api/') 
       ? urlPath.slice(5) // Remove '/api/'
       : urlPath.startsWith('/api')

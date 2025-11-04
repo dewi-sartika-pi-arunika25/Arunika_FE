@@ -183,8 +183,10 @@ export function useSkillMatch(roleCategory) {
 
       console.log('✅ RecId resolved:', recId);
 
-      // 6. Store di sessionStorage untuk reference
-      if (typeof window !== 'undefined') {
+      // 6. Store di sessionStorage HANYA untuk local mode atau temporary reference
+      // NOTE: Data utama sudah disimpan di assessment_cache via backend API
+      // sessionStorage hanya untuk fallback/offline mode
+      if (typeof window !== 'undefined' && String(recId).startsWith('local-')) {
         sessionStorage.setItem('skillmatch_result', JSON.stringify({
           scoreData,
           fitScore,

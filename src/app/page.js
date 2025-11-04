@@ -1,6 +1,7 @@
 "use client";
 
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import LandingHero from "@/components/hero/LandingHero";
@@ -22,7 +23,31 @@ const SectionSkeleton = () => (
   </div>
 );
 
-export default function HomePage() {
+function HomePageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Handle OAuth errors from Supabase that redirect to root
+  useEffect(() => {
+    const error = searchParams.get('error');
+    const errorCode = searchParams.get('error_code');
+    const errorDescription = searchParams.get('error_description');
+
+    // If there's an OAuth error, redirect to login page
+    if (error || errorCode || errorDescription) {
+      console.log('🔍 OAuth error detected on landing page:', { error, errorCode, errorDescription });
+      
+      // Build error message
+      const errorMsg = errorDescription || error || 'Authentication failed';
+      
+      // Redirect to login with error parameters
+      const loginUrl = `/login?error=${encodeURIComponent(errorMsg)}${errorCode ? `&error_code=${errorCode}` : ''}`;
+      console.log('🔗 Redirecting to login:', loginUrl);
+      router.replace(loginUrl);
+      return;
+    }
+  }, [searchParams, router]);
+
   return (
     <>
       <Navbar />
@@ -49,5 +74,17 @@ export default function HomePage() {
       </main>
       <Footer />
     </>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <HomePageContent />
+    </Suspense>
   );
 }
