@@ -1,6 +1,7 @@
 "use client";
+import { memo } from "react";
 
-export default function StepChip({ children, icon }) {
+function StepChip({ children, icon }) {
   return (
     <span
       className={[
@@ -20,3 +21,5 @@ export default function StepChip({ children, icon }) {
     </span>
   );
 }
+
+export default memo(StepChip);

@@ -17,7 +17,6 @@ import { motion } from "framer-motion";
 import { getDimensionExplanation, getDimensionFullName } from "@/lib/utils/dimensionDescriptions";
 
 export default function AnalisisAI() {
-  // ✅ Semua logic dipindahkan ke useAnalisisAI hook
   const {
     profile,
     userName,

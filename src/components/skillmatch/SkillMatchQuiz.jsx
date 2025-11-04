@@ -1,4 +1,3 @@
-// components/skillmatch/SkillMatchQuiz.jsx
 "use client";
 
 import React from 'react';
@@ -9,7 +8,6 @@ import { Progress } from '@/components/ui/progress';
 import { Brain, Loader, Sparkles } from 'lucide-react';
 import { COLORS, TRAIT_COLORS, ASSESSMENT } from '@/lib/config/constants';
 
-// --- SkillMatchQuiz - Skill Match Assessment ---
 export default function SkillMatchQuiz() {
   const {
     questions,
@@ -26,8 +24,6 @@ export default function SkillMatchQuiz() {
 
   const allAnswered = totalQuestions > 0 && answeredCount === totalQuestions;
 
-  // Semua pertanyaan ditampilkan dalam satu list tanpa grouping
-
   if (loading) {
     return (
       <div className="min-h-screen py-16 flex items-center justify-center" style={{ backgroundColor: COLORS.BACKGROUND }}>
@@ -43,30 +39,27 @@ export default function SkillMatchQuiz() {
   }
 
   return (
-      <div className="min-h-screen py-8 text-gray-900" style={{ backgroundColor: COLORS.BACKGROUND }}>
-      <div className="container mx-auto px-4 max-w-4xl">
+    <div className="min-h-screen py-4 sm:py-8 text-gray-900" style={{ backgroundColor: COLORS.BACKGROUND }}>
+      <div className="container mx-auto px-4 sm:px-6 max-w-4xl">
         <Card className="shadow-lg border border-gray-200">
-          <CardContent className="p-6 md:p-8">
-            {/* Header - Sekarang di dalam card */}
-            <div className="text-center mb-6">
-              <div className="flex items-center justify-center space-x-3 mb-3">
-                <Brain className="h-8 w-8" style={{ color: COLORS.PRIMARY }} />
-                <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(to right, ${COLORS.PRIMARY}, ${COLORS.ACCENT})` }}>
+          <CardContent className="p-4 sm:p-6 md:p-8">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
+                <Brain className="h-6 w-6 sm:h-8 sm:w-8" style={{ color: COLORS.PRIMARY }} />
+                <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(to right, ${COLORS.PRIMARY}, ${COLORS.ACCENT})` }}>
                   Skill Match Assessment
                 </h1>
               </div>
-              <p className="text-gray-600 mb-2 text-base">
+              <p className="text-gray-600 mb-2 text-sm sm:text-base">
                 Jawab {totalQuestions} pertanyaan untuk mendapatkan rekomendasi karir IT
               </p>
               
-              {/* Disclaimer kecil */}
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-xs text-gray-500 mb-3 sm:mb-4 px-2">
                 Ini adalah eksplorasi awal, bukan asesmen psikologis resmi
               </p>
               
-              {/* Progress Bar */}
-              <div className="mt-4 space-y-2">
-                <div className="flex justify-between text-sm text-gray-600">
+              <div className="mt-3 sm:mt-4 space-y-2">
+                <div className="flex justify-between text-xs sm:text-sm text-gray-600">
                   <span>{answeredCount} / {totalQuestions} terjawab</span>
                   <span className="font-semibold" style={{ color: COLORS.PRIMARY }}>{progress}%</span>
                 </div>
@@ -81,13 +74,12 @@ export default function SkillMatchQuiz() {
             </div>
 
             {error && (
-              <Card className="mb-6 text-sm" style={{ borderColor: COLORS.PRIMARY, backgroundColor: COLORS.WARNING_BG }}>
-                <CardContent className="p-4" style={{ color: COLORS.WARNING_TEXT }}>{error}</CardContent>
+              <Card className="mb-4 sm:mb-6 text-xs sm:text-sm" style={{ borderColor: COLORS.PRIMARY, backgroundColor: COLORS.WARNING_BG }}>
+                <CardContent className="p-3 sm:p-4" style={{ color: COLORS.WARNING_TEXT }}>{error}</CardContent>
               </Card>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Semua pertanyaan ditampilkan dalam satu list tanpa grouping */}
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {questions.map((question, idx) => (
             <QuestionCard
               key={question.id}
@@ -98,12 +90,11 @@ export default function SkillMatchQuiz() {
             />
           ))}
 
-          {/* Submit Button */}
-          <div className="flex justify-center pt-6 sticky bottom-4 bg-white/80 backdrop-blur-sm rounded-lg p-4 shadow-lg">
+          <div className="flex justify-center pt-4 sm:pt-6 sticky bottom-2 sm:bottom-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 sm:p-4 shadow-lg">
             <Button 
               type="submit"
               disabled={submitting || !allAnswered}
-                className={`inline-flex items-center gap-2 px-8 py-4 rounded-lg font-semibold text-lg transition-all shadow-lg ${
+                className={`inline-flex items-center gap-2 px-4 sm:px-6 md:px-8 py-3 sm:py-4 rounded-lg font-semibold text-sm sm:text-base md:text-lg transition-all shadow-lg ${
                   allAnswered && !submitting 
                     ? 'text-white' 
                     : 'bg-gray-300 text-gray-600 cursor-not-allowed'
