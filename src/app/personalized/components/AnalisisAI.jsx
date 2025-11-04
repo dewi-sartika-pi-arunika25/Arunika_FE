@@ -72,51 +72,22 @@ export default function AnalisisAI() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="p-8 pt-24 space-y-8"
+      className="p-8 pt-8 space-y-4"
     >
-      {/* === WELCOME CARD === */}
-      <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-md text-[#2C2C2C]">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">
-            Selamat Datang, {userName}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-700">
-            Role Fit Anda: <span className="font-bold text-[#FF8C00]">{roleFit}%</span>
-            {roleFit >= 75 && " - Sudah siap untuk apply!"}
-            {roleFit < 60 && " - Fokus pada skill gap di bawah."}
-            {roleFit >= 60 && roleFit < 75 && " - Tingkatkan beberapa skill lagi."}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* === SUMMARY === */}
-      <div className="grid grid-cols-3 gap-4">
-        {summaryMetrics.map((metric, idx) => (
-          <motion.div
-            key={metric.title}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: idx * 0.1 }}
-          >
-            <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 p-4 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
-              <div className={`${metric.color} mb-2`}>
-                {metric.title === "Role Fit" && <Target className="h-5 w-5" />}
-                {metric.title === "Level" && <TrendingUp className="h-5 w-5" />}
-                {metric.title === "Skill Gaps" && <Briefcase className="h-5 w-5" />}
-              </div>
-              <p className="text-lg font-bold text-[#2C2C2C]">{metric.value}</p>
-              <p className="text-sm text-gray-600">{metric.title}</p>
-              {metric.benchmark && (
-                <p className="text-xs text-[#FF8C00] font-semibold mt-1">
-                  {metric.benchmark}
+      {/* Welcome Section */}
+        <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-sm">
+          <CardContent className="p-4 lg:p-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-[#2C2C2C] mb-1">Analisis Detail</h3>
+                <p className="text-sm text-gray-600">
+                  Selamat datang, <span className="font-medium text-[#E4B200]">{userName}</span>. Berikut analisis detail
+                  berdasarkan profil karir Anda.
                 </p>
-              )}
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
       {/* === AI STATUS INDICATOR === */}
       {(!hasAIInsight && aiStatus && aiStatus !== 'completed') && (
