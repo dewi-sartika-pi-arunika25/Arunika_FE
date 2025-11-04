@@ -13,22 +13,61 @@ import { getWithExpiry } from '@/lib/utils/storage';
  */
 export function usePersonalizedProfile() {
   const searchParams = useSearchParams();
-  const recId = (() => {
-    const fromQuery = searchParams.get('rec_id');
-    if (fromQuery) return fromQuery;
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}');
-        return saved?.recId || null;
-      } catch (e) {
-        return null;
+  
+  // Ambil recId dari berbagai sumber (rec_id, id, sessionStorage, atau profile data)
+  const [profile, setProfile] = useState(null);
+  
+  // recId sebagai computed value dengan useMemo - update ketika searchParams atau profile berubah
+  // PRIORITAS: rec_id param > id param (jika UUID) > profile data > sessionStorage (fallback terakhir)
+  const recId = useMemo(() => {
+    // 1. Cek query parameter rec_id (prioritas tertinggi)
+    const fromQueryRecId = searchParams.get('rec_id');
+    if (fromQueryRecId) return fromQueryRecId;
+    
+    // 2. Cek query parameter id - bisa jadi rec_id atau user_id
+    const fromQueryId = searchParams.get('id');
+    if (fromQueryId) {
+      // Jika id adalah UUID (format personalized rec_id), gunakan langsung
+      // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars dengan dashes)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(fromQueryId)) {
+        return fromQueryId; // Kemungkinan rec_id
+      }
+      // Jika bukan UUID, mungkin user_id - akan di-resolve via API nanti
+    }
+    
+    // 3. Cek dari profile data yang sudah di-fetch (jika ada)
+    // Cek berbagai kemungkinan field: rec_id, id (jika UUID), atau field lain
+    if (profile?.rec_id) return profile.rec_id;
+    // Cek apakah profile.id adalah UUID (format personalized rec_id)
+    if (profile?.id) {
+      const idStr = String(profile.id);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(idStr) || idStr.length > 20) {
+        // Jika UUID atau panjang, kemungkinan rec_id
+        return idStr;
       }
     }
+    
+      // 4. Fallback: Cek sessionStorage (HANYA untuk local/offline mode)
+      // NOTE: Data utama seharusnya dari assessment_cache via API, bukan sessionStorage
+      // sessionStorage hanya untuk backward compatibility dan offline mode
+      if (typeof window !== 'undefined') {
+        try {
+          const saved = JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}');
+          if (saved?.recId && String(saved.recId).startsWith('local-')) {
+            // Hanya gunakan jika local (temporary/offline mode)
+            return saved.recId;
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    
     return null;
-  })();
-  const isLocalRec = recId && String(recId).startsWith('local-');
+  }, [searchParams, profile]);
   
-  const [profile, setProfile] = useState(null);
+  const isLocalRec = recId && String(recId).startsWith('local-');
   const [user, setUser] = useState(null); // ✅ diperbaiki: hapus const userId yang salah
   const [jobRecommendations, setJobRecommendations] = useState([]);
   const [skillRecommendations, setSkillRecommendations] = useState([]);
@@ -91,10 +130,89 @@ export function usePersonalizedProfile() {
     }
     
     if (!recId) {
-      // Fallback ke data lokal jika tersedia
+      // Jika recId masih null, coba resolve dari user_id via API
+      const userIdFromQuery = searchParams.get('id');
+      
+      if (userIdFromQuery && !userIdFromQuery.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        // id adalah user_id (bukan UUID), fetch personalized profile dari API
+        const fetchByUserId = async () => {
+          try {
+            setLoading(true);
+            const userPersonalizationsRes = await personalizedAPI.getByUserId(userIdFromQuery, 1, 1);
+            
+            if (userPersonalizationsRes?.data?.success && userPersonalizationsRes.data.data?.personalizations?.length > 0) {
+              // Ambil personalized profile terbaru
+              const latestPersonalized = userPersonalizationsRes.data.data.personalizations[0];
+              const resolvedRecId = latestPersonalized.rec_id || latestPersonalized.id;
+              
+              if (resolvedRecId) {
+                // Fetch full profile dengan rec_id yang ditemukan
+                const fullProfileRes = await personalizedAPI.getWithRecs(resolvedRecId);
+                if (fullProfileRes?.data?.success) {
+                  const profileData = fullProfileRes.data.data.personalized;
+                  const jobRecs = fullProfileRes.data.data.job_recommendations || [];
+                  const skillRecs = fullProfileRes.data.data.skill_recommendations || [];
+                  
+                  setProfile(profileData);
+                  setJobRecommendations(jobRecs);
+                  setSkillRecommendations(skillRecs);
+                  
+                  // Resolve user name
+                  const userId = profileData?.user_id;
+                  if (userId) {
+                    try {
+                      const userRes = await usersAPI.getById(userId);
+                      if (userRes.data?.success && userRes.data.data?.user) {
+                        const userObj = userRes.data.data.user;
+                        setUser({ ...userObj, name: userObj.name || userObj.email || 'User' });
+                      } else {
+                        setUser({ name: typeof userId === 'string' ? userId : 'User' });
+                      }
+                    } catch (userErr) {
+                      setUser({ name: typeof userId === 'string' ? userId : 'User' });
+                    }
+                  }
+                  
+                  setError('');
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+            
+            // Jika tidak ada personalized profile, cek assessment_cache
+            setError('Profil personalized tidak ditemukan. Silakan selesaikan assessment terlebih dahulu.');
+          } catch (apiErr) {
+            console.error('Error fetching personalized by user_id:', apiErr);
+            // Fallback ke sessionStorage HANYA jika API gagal total
+            try {
+              const saved = typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}') : {};
+              if (saved?.personalizedRecord) {
+                setProfile(saved.personalizedRecord);
+                setUser({ name: saved.personalizedRecord.user_id || 'User' });
+                setJobRecommendations([]);
+                setSkillRecommendations([]);
+                setError('');
+              } else {
+                setError('rec_id tidak ditemukan. Pastikan datang dari Skillmatch atau sertakan ?rec_id=...');
+              }
+            } catch (e) {
+              setError('rec_id tidak ditemukan. Pastikan datang dari Skillmatch atau sertakan ?rec_id=...');
+            }
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        fetchByUserId();
+        return;
+      }
+      
+      // Fallback terakhir: sessionStorage (HANYA untuk local mode)
       try {
         const saved = typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}') : {};
-        if (saved?.personalizedRecord) {
+        if (saved?.personalizedRecord && saved?.recId?.startsWith('local-')) {
+          // Hanya gunakan jika local mode (offline/temporary)
           setProfile(saved.personalizedRecord);
           setUser({ name: saved.personalizedRecord.user_id || 'User' });
           setJobRecommendations([]);
@@ -304,7 +422,7 @@ export function usePersonalizedProfile() {
     };
 
     fetchAll();
-  }, [recId]);
+  }, [recId, isLocalRec]);
 
   // ============================================
   // COMPUTED VALUES - Phase 1 (Logic-based)
@@ -350,59 +468,168 @@ export function usePersonalizedProfile() {
     nextSteps: profile ? generateNextSteps(profile) : []
   };
 
-  // Function untuk refresh AI analysis (bisa dipanggil dari komponen)
-  const refreshAIAnalysis = async () => {
-    if (!recId || refreshingAI) return;
+  // Function untuk refresh AI analysis (dipisah dari langchain logic, langsung call endpoint)
+  const refreshAIAnalysis = async (analysisType = 'detailed') => {
+    // Validasi recId - coba resolve lagi jika null
+    let currentRecId = recId;
+    
+    // Jika recId masih null, coba resolve dari profile atau query params
+    if (!currentRecId) {
+      // Cek dari profile yang sudah di-fetch - cek semua kemungkinan field
+      if (profile?.rec_id) {
+        currentRecId = profile.rec_id;
+      } else if (profile?.id) {
+        const idStr = String(profile.id);
+        // Jika profile.id adalah UUID atau panjang, gunakan sebagai rec_id
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(idStr) || idStr.length > 20) {
+          currentRecId = idStr;
+        }
+      }
+      // Cek dari query params
+      else if (searchParams.get('rec_id')) currentRecId = searchParams.get('rec_id');
+      else if (searchParams.get('id')) currentRecId = searchParams.get('id');
+      // Cek sessionStorage (HANYA untuk local mode - data utama dari assessment_cache via API)
+      else if (typeof window !== 'undefined') {
+        try {
+          const saved = JSON.parse(sessionStorage.getItem('skillmatch_result') || '{}');
+          // Hanya gunakan jika local mode (offline/temporary)
+          if (saved?.recId?.startsWith('local-')) {
+            currentRecId = saved.recId;
+          } else if (saved?.personalizedRecord?.rec_id) {
+            currentRecId = saved.personalizedRecord.rec_id;
+          } else if (saved?.personalizedRecord?.id) {
+            currentRecId = saved.personalizedRecord.id;
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+    
+    if (!currentRecId) {
+      // Debug: log semua kemungkinan field dari profile
+      console.error('❌ refreshAIAnalysis: recId tidak ada setelah semua resolusi', { 
+        recId, 
+        profile: profile ? {
+          id: profile.id,
+          rec_id: profile.rec_id,
+          user_id: profile.user_id,
+          allKeys: Object.keys(profile || {}),
+          sample: JSON.stringify(profile).substring(0, 200)
+        } : null,
+        queryParams: { rec_id: searchParams.get('rec_id'), id: searchParams.get('id') }
+      });
+      
+      // Coba ambil dari URL jika ada (terakhir)
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRecId = urlParams.get('rec_id') || urlParams.get('id');
+        if (urlRecId) {
+          console.log('✅ Found recId from URL:', urlRecId);
+          currentRecId = urlRecId;
+        }
+      }
+      
+      if (!currentRecId) {
+        logError('recId tidak ditemukan. Pastikan Anda sudah menyelesaikan assessment dan memiliki personalized profile.');
+        alert('Tidak dapat menemukan ID profil. Pastikan Anda sudah menyelesaikan assessment.');
+        return;
+      }
+    }
+    
+    if (refreshingAI) {
+      console.warn('refreshAIAnalysis: Already refreshing, skipping...');
+      return;
+    }
     
     try {
+      console.log('🔄 Starting AI analysis refresh...', { recId: currentRecId, analysisType });
       setRefreshingAI(true);
-      // Gunakan endpoint personalized yang lebih spesifik
-      await personalizedAPI.refreshAIAnalysis(recId);
+      setAiStatus('pending');
       
-      // Poll untuk hasil baru (sama seperti saat pertama load)
+      // Call endpoint langsung (tidak perlu polling assessmentAPI, langsung dari personalized)
+      const response = await personalizedAPI.refreshAIAnalysis(currentRecId, analysisType);
+      
+      if (!response?.data?.success) {
+        throw new Error(response?.data?.error || 'Failed to trigger AI analysis');
+      }
+      
+      console.log('✅ AI analysis triggered:', response.data);
+      
+      // Poll untuk hasil - langsung fetch dari personalized endpoint
       let attempts = 0;
-      const maxAttempts = 12; // 1 menit polling
+      const maxAttempts = 24; // 2 menit polling (24 x 5s)
       const pollInterval = setInterval(async () => {
         attempts += 1;
         try {
-          const statusRes = await assessmentAPI.checkStatus();
-          const completed = statusRes?.data?.data?.is_completed;
-          const failed = statusRes?.data?.data?.is_failed;
-          const status = statusRes?.data?.data?.ai_status;
+          // Fetch personalized profile langsung untuk dapat AI analysis
+          const profileRes = await personalizedAPI.getById(currentRecId);
           
-          if (status) setAiStatus(status);
+          if (profileRes?.data?.success) {
+            const personalizedData = profileRes.data.data?.personalized || profileRes.data.data;
+            const aiAnalysis = personalizedData?.ai_analysis || personalizedData?.ai_insight;
+            
+            if (aiAnalysis && Object.keys(aiAnalysis).length > 0) {
+              console.log('✅ AI analysis completed, updating profile');
+              setProfile(prev => ({ ...(prev || {}), ai_insight: aiAnalysis }));
+              setAiStatus('completed');
+              clearInterval(pollInterval);
+              setRefreshingAI(false);
+              return;
+            }
+          }
           
-          if (completed) {
-            try {
+          // Fallback: check status via assessment API juga
+          try {
+            const statusRes = await assessmentAPI.checkStatus();
+            const completed = statusRes?.data?.data?.is_completed;
+            const failed = statusRes?.data?.data?.is_failed;
+            const status = statusRes?.data?.data?.ai_status;
+            
+            if (status) setAiStatus(status);
+            
+            if (completed) {
               const res = await assessmentAPI.getResults();
               if (res.data?.success && res.data.data?.ai_analysis) {
                 setProfile(prev => ({ ...(prev || {}), ai_insight: res.data.data.ai_analysis }));
                 setAiStatus('completed');
+                clearInterval(pollInterval);
+                setRefreshingAI(false);
+                return;
               }
+            } else if (failed || status === 'failed') {
+              setAiStatus('failed');
               clearInterval(pollInterval);
-            } catch (resErr) {
-              logWarning('Failed to fetch AI results:', resErr);
+              setRefreshingAI(false);
+              return;
             }
-          } else if (failed || status === 'failed') {
-            setAiStatus('failed');
-            clearInterval(pollInterval);
-          } else if (attempts >= maxAttempts) {
+          } catch (statusErr) {
+            // Ignore status check errors, continue polling
+            console.warn('Status check error (continuing):', statusErr);
+          }
+          
+          // Timeout handling
+          if (attempts >= maxAttempts) {
+            console.warn('⏱️ AI analysis polling timeout');
             clearInterval(pollInterval);
             setAiStatus('timeout');
+            setRefreshingAI(false);
           }
         } catch (pollErr) {
-          logWarning('Poll error:', pollErr);
+          console.warn('Poll error (continuing):', pollErr);
           if (attempts >= maxAttempts) {
             clearInterval(pollInterval);
             setAiStatus('error');
+            setRefreshingAI(false);
           }
         }
       }, 5000);
       
     } catch (err) {
+      console.error('❌ Error refreshing AI analysis:', err);
       logError('Error refreshing AI analysis:', err);
       setAiStatus('error');
-    } finally {
       setRefreshingAI(false);
     }
   };
@@ -666,9 +893,10 @@ function synthesizeSkillGaps(strengthsObj) {
  * 
  * @param {string} personalizedId - ID dari personalized profile (rec_id)
  * @param {boolean} autoFetch - Auto fetch saat mount (default: false)
+ * @param {string} analysisType - 'summary' untuk dashboard (ringkas) atau 'detailed' untuk AnalisisAI (mendalam, default: 'summary')
  * @returns {Object} { aiInsight, aiLoading, aiError, generateInsight, refreshAnalysis }
  */
-export function useAIAnalysis(personalizedId, autoFetch = false) {
+export function useAIAnalysis(personalizedId, autoFetch = false, analysisType = 'summary') {
   const [aiInsight, setAiInsight] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -683,7 +911,7 @@ export function useAIAnalysis(personalizedId, autoFetch = false) {
     setAiError(null);
 
     try {
-      const response = await personalizedAPI.refreshAIAnalysis(personalizedId);
+      const response = await personalizedAPI.refreshAIAnalysis(personalizedId, analysisType);
       
       if (response?.data?.success) {
         const analysis = response.data.data?.ai_analysis || 
@@ -705,7 +933,7 @@ export function useAIAnalysis(personalizedId, autoFetch = false) {
     } finally {
       setAiLoading(false);
     }
-  }, [personalizedId]);
+  }, [personalizedId, analysisType]);
 
   useEffect(() => {
     if (autoFetch && personalizedId && !aiInsight && !aiLoading) {

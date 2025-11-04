@@ -17,13 +17,11 @@ const api = axios.create({
   withCredentials: true, // Important: Send cookies automatically (for httpOnly cookie support)
 });
 
-// ✅ Add token to requests from Zustand store
+// ✅ Add token to requests (NextAuth cookies automatically sent via withCredentials)
 api.interceptors.request.use((config) => {
-  // Get token from Zustand store
-  const token = useAuthStore.getState().getToken();
-  if (token && !config.headers.Authorization) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  // NOTE: NextAuth session token sudah otomatis dikirim via httpOnly cookie
+  // Backend akan verify NextAuth JWT dari cookie
+  // Tidak perlu set Authorization header karena backend pakai cookie
   return config;
 });
 
@@ -50,21 +48,22 @@ api.interceptors.response.use(
       try {
         const { refreshToken, setTokens, logout } = useAuthStore.getState();
         
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
+        // NOTE: Refresh token bisa dari state (temporary) atau httpOnly cookie
+        // Backend akan handle refresh via cookie jika tersedia
+        
         // Show loading toast while refreshing
         const toast = getToast();
         const loadingId = toast.loading('Memperbarui sesi...', { duration: 0 });
 
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
-        });
+        // Try refresh with cookie first (backend will use cookie if available)
+        // If cookie not available, use refreshToken from state
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, 
+          refreshToken ? { refresh_token: refreshToken } : {}
+        );
 
         const { access_token, refresh_token } = response.data.data;
         
-        // ✅ Update tokens in Zustand store
+        // ✅ Update tokens in Zustand store (temporary, backend sets httpOnly cookies)
         setTokens(access_token, refresh_token);
 
         // Dismiss loading toast
@@ -253,7 +252,8 @@ export const personalizedAPI = {
   getWithRecs: (id) => api.get(`/personalized/${id}/recommendations`),
   create: (data) => api.post('/personalized', data),
   update: (id, data) => api.put(`/personalized/${id}`, data),
-  refreshAIAnalysis: (id) => api.post(`/personalized/${id}/refresh-ai`),
+  refreshAIAnalysis: (id, analysisType = 'summary') => 
+    api.post(`/personalized/${id}/refresh-ai?analysis_type=${analysisType}`),
 };
 
 // ============ RECOMMENDATIONS ENDPOINTS ============

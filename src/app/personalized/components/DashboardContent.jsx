@@ -8,6 +8,7 @@ import {
   BarChart3,
   PieChart,
   TrendingUp,
+  ArrowRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -486,6 +487,43 @@ export default function DashboardContent({ filters = null }) {
                 </div>
               </div>
             )}
+
+            {/* Button untuk navigate ke AnalisisAI */}
+            <div className="mt-4 pt-4 border-t border-[#E4B200]/20">
+              <button
+                onClick={() => {
+                  const currentUrl = new URL(window.location.href);
+                  const idParam = currentUrl.searchParams.get('id') || '';
+                  window.location.href = `/personalized?id=${idParam}&menu=analisis`;
+                }}
+                className="w-full px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-300 text-center relative overflow-hidden"
+                style={{ 
+                  background: 'linear-gradient(135deg, rgba(228, 178, 0, 0.15) 0%, rgba(255, 216, 77, 0.2) 100%)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '2px solid rgba(228, 178, 0, 0.4)',
+                  boxShadow: '0 2px 8px rgba(228, 178, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+                  color: '#E4B200'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(228, 178, 0, 0.25) 0%, rgba(255, 216, 77, 0.3) 100%)';
+                  e.currentTarget.style.borderColor = 'rgba(228, 178, 0, 0.6)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(228, 178, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.7)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(228, 178, 0, 0.15) 0%, rgba(255, 216, 77, 0.2) 100%)';
+                  e.currentTarget.style.borderColor = 'rgba(228, 178, 0, 0.4)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(228, 178, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                Lihat Analisis AI Detail
+              </button>
+              <p className="text-xs text-gray-500 text-center mt-2">
+                Dapatkan analisis mendalam tentang profil karir Anda
+              </p>
+            </div>
           </div>
         </motion.div>
 

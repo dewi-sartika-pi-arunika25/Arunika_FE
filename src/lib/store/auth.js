@@ -55,6 +55,8 @@ export const useAuthStore = create(
           localStorage.removeItem('userProfile');
           localStorage.removeItem('user_id');
           
+          // Note: sessionStorage is not used for auth (using localStorage instead)
+          // Assessment results may be in sessionStorage but should persist with expiry
         }
       },
 
