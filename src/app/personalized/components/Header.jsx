@@ -26,11 +26,9 @@ export default function Header({
   const [showFilters, setShowFilters] = useState(false);
   const filterRef = useRef(null);
   
-  // ✅ Get name from auth store (prioritas: user_metadata.name > user.name > profile.name)
   const authUserName = authStore.user?.user_metadata?.name || authStore.user?.name || authStore.profile?.name;
   const displayName = authUserName || user?.name || 'Pengguna';
 
-  // ✅ Fungsi logout menggunakan Zustand
   const handleLogout = () => {
     logout();
     router.push("/login");

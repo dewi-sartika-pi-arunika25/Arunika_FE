@@ -1,49 +1,83 @@
 // components/ForgotPassword.jsx atau app/forgot-password/page.jsx
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, RefreshCw, ArrowLeft } from 'lucide-react'; 
+import { Mail, RefreshCw, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
+import { authAPI } from '@/lib/api';
 
 /**
  * Komponen Halaman Lupa Kata Sandi (Forgot Password)
+ * Menggunakan Zustand store dan backend API
  */
 const ForgotPasswordPage = () => {
-    const [email, setEmail] = React.useState('');
-    const [isSubmitted, setIsSubmitted] = React.useState(false);
+    const [email, setEmail] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
         
         if (!email) {
-            alert("Harap masukkan alamat email.");
+            setError("Harap masukkan alamat email.");
             return;
         }
 
-        // --- Logika Backend Simulasi ---
-        console.log(`Mengirim tautan reset ke: ${email}`);
-        
-        // Dalam aplikasi nyata, panggil API untuk mengirim email reset.
-        
-        setIsSubmitted(true);
+        // Validasi email format sederhana
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            setError("Format email tidak valid.");
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            // Panggil backend API untuk kirim email reset password
+            const response = await authAPI.forgotPassword(email);
+
+            if (response?.data?.success) {
+                setIsSubmitted(true);
+            } else {
+                setError(response?.data?.error || response?.data?.message || 'Gagal mengirim email reset. Silakan coba lagi.');
+            }
+        } catch (err) {
+            console.error('Forgot password error:', err);
+            setError(
+                err?.response?.data?.error || 
+                err?.response?.data?.message ||
+                'Gagal mengirim email reset. Pastikan email Anda terdaftar dan coba lagi.'
+            );
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     if (isSubmitted) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-background text-foreground p-4">
                 <Card className="w-full max-w-sm shadow-2xl text-center">
-                    <CardHeader>
+                    <CardHeader className="space-y-4">
+                        <div className="flex justify-center">
+                            <CheckCircle className="w-16 h-16 text-green-600" />
+                        </div>
                         <CardTitle className="text-2xl">Cek Email Anda 📧</CardTitle>
                         <CardDescription>
-                            Kami telah mengirimkan tautan pemulihan kata sandi ke **{email}**. Silakan periksa kotak masuk Anda (dan folder spam).
+                            Kami telah mengirimkan tautan pemulihan kata sandi ke <strong>{email}</strong>. 
+                            Silakan periksa kotak masuk Anda (dan folder spam).
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                         <Link href="/login" passHref>
-                            <Button variant="link" className="text-primary hover:underline">
+                    <CardContent className="space-y-4">
+                        <p className="text-sm text-gray-600">
+                            Jika email tidak muncul dalam beberapa menit, periksa folder spam atau coba lagi.
+                        </p>
+                        <Link href="/login" className="w-full block">
+                            <Button className="w-full">
                                 Kembali ke Halaman Masuk
                             </Button>
                         </Link>
@@ -67,6 +101,13 @@ const ForgotPasswordPage = () => {
 
                 <form onSubmit={handleSubmit}>
                     <CardContent className="grid gap-4">
+                        {error && (
+                            <div className="p-3 rounded-md bg-red-100 text-red-700 text-sm border border-red-300 flex gap-2">
+                                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                <span>{error}</span>
+                            </div>
+                        )}
+
                         {/* Input Email */}
                         <div className="grid gap-2">
                             <Label htmlFor="email">Email</Label>
@@ -77,15 +118,32 @@ const ForgotPasswordPage = () => {
                                     type="email"
                                     placeholder="nama@email.com"
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => {
+                                        setEmail(e.target.value);
+                                        setError('');
+                                    }}
                                     required
                                     className="pl-10"
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
 
-                        <Button type="submit" className="w-full mt-2">
-                            Kirim Tautan Reset <RefreshCw className="ml-2 h-4 w-4" />
+                        <Button 
+                            type="submit" 
+                            className="w-full mt-2" 
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <>
+                                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                    Mengirim...
+                                </>
+                            ) : (
+                                <>
+                                    Kirim Tautan Reset <RefreshCw className="ml-2 h-4 w-4" />
+                                </>
+                            )}
                         </Button>
                     </CardContent>
                 </form>

@@ -30,7 +30,6 @@ import {
 } from "recharts";
 
 export default function DashboardContent({ filters = null }) {
-  // ✅ Semua logic dipindahkan ke useDashboardLogic hook
   const {
     profile,
     userName,
@@ -58,6 +57,9 @@ export default function DashboardContent({ filters = null }) {
   const filteredNextSteps = filters ? filters.filterNextSteps(nextSteps) : nextSteps;
   const filteredStrengths = filters ? filters.filterStrengths(topStrengths) : topStrengths;
 
+  // Check if user has assessment data
+  const hasAssessmentData = !!(profile?.disc_profile && profile?.riasec_profile);
+
   // === Kondisi loading & error setelah semua hook ===
   if (loading) {
     return (
@@ -78,6 +80,30 @@ export default function DashboardContent({ filters = null }) {
         <Card className="border-red-300 bg-red-50">
           <CardContent className="p-4 text-red-700">
             {error || "Gagal memuat profil"}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show message if no assessment data
+  if (!hasAssessmentData) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[60vh]">
+        <Card className="w-full max-w-md bg-[#FFFDF5] border border-[#E4B200]/40 shadow-md">
+          <CardContent className="p-8 text-center">
+            <Target className="h-16 w-16 mx-auto mb-4" style={{ color: '#E4B200' }} />
+            <h3 className="text-xl font-semibold text-[#2C2C2C] mb-2">Belum Ada Data Assessment</h3>
+            <p className="text-gray-600 mb-6">
+              Untuk melihat dashboard yang lengkap, silakan selesaikan assessment terlebih dahulu.
+            </p>
+            <button
+              onClick={() => window.location.href = '/skill-match'}
+              className="px-6 py-3 rounded-xl text-white font-semibold shadow-sm hover:shadow-md transition-shadow w-full"
+              style={{ backgroundColor: '#E4B200' }}
+            >
+              Mulai Assessment
+            </button>
           </CardContent>
         </Card>
       </div>

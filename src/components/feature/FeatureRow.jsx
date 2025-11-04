@@ -117,16 +117,17 @@ export default function FeatureRows() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: false, amount: 0.35, margin: "-10% 0px -10% 0px" }}
+            suppressHydrationWarning
           >
-            <motion.div className="md:w-1/2" variants={fly(i % 2 === 1 ? "right" : "left")}>
+            <motion.div className="w-full md:w-1/2" variants={fly(i % 2 === 1 ? "right" : "left")}>
               <Visual imageSrc={f.imageSrc} alt={f.alt} />
             </motion.div>
 
-            <motion.div className="md:w-1/2" variants={fly(i % 2 === 1 ? "left" : "right")}>
+            <motion.div className="w-full md:w-1/2" variants={fly(i % 2 === 1 ? "left" : "right")}>
               <div
                 className="
-                  max-w-xl
-                  pt-1 sm:pt-2 md:pt-3
+                  max-w-xl mx-auto md:mx-0
+                  pt-1 sm:pt-2 md:pt-3 px-4 sm:px-0
                 "
               >
                 <span
