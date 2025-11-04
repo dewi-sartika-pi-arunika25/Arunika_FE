@@ -70,86 +70,38 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const { accessToken, refreshToken } = session;
+      // Use NextAuth session data directly - backend sync is handled in NextAuth callbacks
+      const { accessToken, refreshToken, user } = session;
       
-      if (accessToken && refreshToken) {
-        login({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          user: session.user,
-          profile: session.user,
-        });
-        
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        try {
-          const meResponse = await authAPI.me();
-          if (meResponse?.data?.success) {
-            const hasAssessment = meResponse.data.data?.has_assessment || false;
-            hasProcessedRef.current = true;
-            redirectAfterAuth(hasAssessment);
-            return;
-          }
-        } catch (profileErr) {
-          console.warn('Failed to fetch profile:', profileErr);
-        }
-        
-        hasProcessedRef.current = true;
-        redirectAfterAuth(false);
-        return;
-      }
+      // Cek apakah user sudah punya assessment dari token atau user data
+      // Backend sync sudah dilakukan di NextAuth JWT callback, token mungkin sudah ada
+      const hasAssessment = session.user?.has_assessment || 
+                           user?.has_assessment || 
+                           false;
       
-      const authState = useAuthStore.getState();
-      if (authState.isAuthenticated && authState.accessToken) {
-        const hasAssessment = authState.user?.has_assessment || false;
-        hasProcessedRef.current = true;
-        redirectAfterAuth(hasAssessment);
-        return;
-      }
-      
-      try {
-        const meResponse = await authAPI.me();
-        if (meResponse?.data?.success) {
-          login({
-            access_token: session.accessToken || 'oauth_token',
-            refresh_token: session.refreshToken || 'oauth_refresh',
-            user: meResponse.data.data,
-            profile: meResponse.data.data,
-          });
-          const hasAssessment = meResponse.data.data?.has_assessment || false;
-          hasProcessedRef.current = true;
-          redirectAfterAuth(hasAssessment);
-          return;
-        }
-      } catch (meErr) {
-        console.log('User might not exist, trying register...');
-      }
-      
-      try {
-        const registerResponse = await authAPI.register({
-          name: session.user.name || session.user.email,
-          email: session.user.email,
-          password: `oauth_${session.user.id}_${Date.now()}`,
-        });
-
-        if (registerResponse?.data?.success) {
-          login(registerResponse.data.data);
-          const hasAssessment = registerResponse.data.data?.has_assessment || false;
-          hasProcessedRef.current = true;
-          redirectAfterAuth(hasAssessment);
-          return;
-        }
-      } catch (registerErr) {
-        if (registerErr?.response?.status === 409) {
-          hasProcessedRef.current = true;
-          redirectAfterAuth(false);
-          return;
-        }
-        throw registerErr;
-      }
+      // Login dengan data dari NextAuth session
+      login({
+        access_token: accessToken || 'oauth_token',
+        refresh_token: refreshToken || 'oauth_refresh',
+        user: {
+          id: user?.id || user?.email,
+          email: user?.email,
+          name: user?.name || user?.email,
+          has_assessment: hasAssessment,
+          ...user,
+        },
+        profile: {
+          user_id: user?.id || user?.email,
+          email: user?.email,
+          name: user?.name || user?.email,
+          has_assessment: hasAssessment,
+          ...user,
+        },
+      });
       
       hasProcessedRef.current = true;
-      redirectAfterAuth(false);
+      // Redirect berdasarkan assessment status
+      redirectAfterAuth(hasAssessment);
     } catch (err) {
       console.error('OAuth sync error:', err);
       setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
@@ -234,8 +186,16 @@ export default function LoginPage() {
     try {
       const response = await authAPI.login(formData.email, formData.password);
       if (response?.data?.success) {
-        login(response.data.data);
-        window.location.href = "/personalized";
+        const userData = response.data.data;
+        login(userData);
+        
+        // Check has_assessment untuk redirect yang tepat
+        const hasAssessment = userData?.user?.has_assessment || 
+                             userData?.profile?.has_assessment || 
+                             userData?.has_assessment || 
+                             false;
+        
+        window.location.href = getRedirectPath(hasAssessment);
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
