@@ -1,14 +1,23 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useDISCRIASEC } from '@/hooks/useDISCRIASEC';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Brain, Loader, Sparkles } from 'lucide-react';
+import { Brain, Loader, Sparkles, CheckCircle2 } from 'lucide-react';
 import { COLORS, TRAIT_COLORS, ASSESSMENT } from '@/lib/config/constants';
+import { assessmentAPI } from '@/lib/api';
+import { getWithExpiry } from '@/lib/utils/storage';
+import { STORAGE_KEYS } from '@/lib/config/constants';
+import { useAuthStore } from '@/lib/store/auth';
 
 export default function SkillMatchQuiz() {
+  const router = useRouter();
+  const [checkingAssessment, setCheckingAssessment] = useState(true);
+  const [hasExistingAssessment, setHasExistingAssessment] = useState(false);
+  
   const {
     questions,
     answers,
@@ -22,7 +31,106 @@ export default function SkillMatchQuiz() {
     progress
   } = useDISCRIASEC();
 
+  // Check if user already has assessment results
+  useEffect(() => {
+    const checkExistingAssessment = async () => {
+      try {
+        // 1. Check localStorage first (fast)
+        const cachedResults = getWithExpiry(STORAGE_KEYS.DISC_RIASEC_RESULTS);
+        if (cachedResults) {
+          console.log('✅ Found cached assessment results in localStorage');
+          setHasExistingAssessment(true);
+          setCheckingAssessment(false);
+          // Redirect to personalized with results
+          setTimeout(() => {
+            router.push('/personalized?assessment=disc_riasec');
+          }, 1000);
+          return;
+        }
+
+        // 2. Check backend assessment_cache
+        try {
+          const statusRes = await assessmentAPI.checkStatus();
+          if (statusRes?.data?.success) {
+            const isCompleted = statusRes.data.data?.is_completed;
+            const hasResults = statusRes.data.data?.has_results;
+            
+            if (isCompleted || hasResults) {
+              console.log('✅ Found assessment results in backend');
+              // Try to get results
+              try {
+                const resultsRes = await assessmentAPI.getResults();
+                if (resultsRes?.data?.success && resultsRes.data.data) {
+                  setHasExistingAssessment(true);
+                  setCheckingAssessment(false);
+                  // Redirect to personalized with results
+                  setTimeout(() => {
+                    router.push('/personalized?assessment=disc_riasec');
+                  }, 1000);
+                  return;
+                }
+              } catch (resultsErr) {
+                console.warn('Could not fetch results, continuing with quiz:', resultsErr);
+              }
+            }
+          }
+        } catch (statusErr) {
+          // If checkStatus fails, continue with quiz
+          console.log('No existing assessment found, continuing with quiz');
+        }
+
+        // 3. Check has_assessment from auth store
+        const hasAssessment = useAuthStore.getState().hasAssessment();
+        if (hasAssessment) {
+          console.log('✅ User has assessment flag, redirecting to personalized');
+          setHasExistingAssessment(true);
+          setCheckingAssessment(false);
+          setTimeout(() => {
+            router.push('/personalized');
+          }, 1000);
+          return;
+        }
+
+        setCheckingAssessment(false);
+      } catch (err) {
+        console.error('Error checking existing assessment:', err);
+        setCheckingAssessment(false);
+      }
+    };
+
+    checkExistingAssessment();
+  }, [router]);
+
   const allAnswered = totalQuestions > 0 && answeredCount === totalQuestions;
+
+  // Show checking state
+  if (checkingAssessment) {
+    return (
+      <div className="min-h-screen py-16 flex items-center justify-center" style={{ backgroundColor: COLORS.BACKGROUND }}>
+        <Card className="w-full max-w-2xl shadow-lg">
+          <CardContent className="p-8 text-center">
+            <Loader className="h-12 w-12 animate-spin mx-auto mb-4" style={{ color: COLORS.PRIMARY }} />
+            <p className="text-gray-600 text-lg">Memeriksa hasil assessment sebelumnya...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show message if has existing assessment (briefly before redirect)
+  if (hasExistingAssessment) {
+    return (
+      <div className="min-h-screen py-16 flex items-center justify-center" style={{ backgroundColor: COLORS.BACKGROUND }}>
+        <Card className="w-full max-w-2xl shadow-lg">
+          <CardContent className="p-8 text-center">
+            <CheckCircle2 className="h-12 w-12 mx-auto mb-4" style={{ color: COLORS.PRIMARY }} />
+            <p className="text-gray-600 text-lg">Anda sudah memiliki hasil assessment.</p>
+            <p className="text-gray-500 text-sm mt-2">Mengarahkan ke dashboard...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

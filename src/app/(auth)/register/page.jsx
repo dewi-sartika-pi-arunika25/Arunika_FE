@@ -153,7 +153,8 @@ export default function RegisterPage() {
 
   const handleGoogleSignIn = () => {
     // ✅ Use default NextAuth path (/api/auth)
-    signIn('google', { callbackUrl: '/personalized' });
+    // Redirect ke skill-match karena user baru belum ada assessment
+    signIn('google', { callbackUrl: '/skill-match' });
   };
 
     return (
