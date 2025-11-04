@@ -1,7 +1,7 @@
 .embla {
   overflow: hidden;
-  --slide-spacing: 1.5rem; /* Jarak antar slide (bisa disesuaikan) */
-  --slide-size: 100%; /* <-- UBAH INI: Setiap slide sekarang 100% width */
+  --slide-spacing: 1.25rem;
+  --slide-size: 100%;
 }
 
 .embla__viewport {
@@ -12,7 +12,7 @@
   backface-visibility: hidden;
   display: flex;
   touch-action: pan-y;
-  /* (Kita atur margin-left di JSX untuk 'loop: true') */
+  margin-left: calc(var(--slide-spacing) * -1);
 }
 
 .embla__slide {
@@ -20,4 +20,11 @@
   min-width: 0;
   padding-left: var(--slide-spacing);
   position: relative;
+}
+
+/* Responsif: buat visual lebih padat di layar besar */
+@media (min-width: 1024px) {
+  .embla {
+    --slide-spacing: 1.5rem;
+  }
 }
