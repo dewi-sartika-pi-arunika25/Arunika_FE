@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
+import { Mail, Lock, LogIn,Eye, EyeOff, Home } from "lucide-react";
 import { signIn, useSession, getSession } from "next-auth/react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
@@ -99,6 +99,8 @@ export default function LoginPage() {
     setFormData((prev) => ({ ...prev, [id]: value }));
     setError("");
   };
+  
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -224,17 +226,31 @@ export default function LoginPage() {
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+  
                 <Input
-                  id="password"
-                  type="password"
-                  placeholder="Masukkan kata sandi Anda"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Masukkan kata sandi Anda"
+                value={formData.password}
+                onChange={handleChange}
+                required
+               className="pl-10 pr-10"
+               disabled={isLoading}
+               />
+
+               <button
+               type="button"
+               onClick={() => setShowPassword((prev) => !prev)}
+                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                   {showPassword ? (
+                 <EyeOff className="h-4 w-4" />
+                 ) : (
+                <Eye className="h-4 w-4" />
+                )}
+             </button>
+            </div>
+
             </div>
 
             <Button type="submit" className="w-full mt-2" disabled={isLoading}>

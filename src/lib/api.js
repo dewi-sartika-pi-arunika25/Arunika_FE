@@ -170,7 +170,8 @@ export const authAPI = {
   /** Register new user account */
   register: (data) => api.post('/auth/register', data),
   /** Login with email and password */
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login: (email, password) =>
+    axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, { email, password }),
   /** Logout current user */
   logout: () => api.post('/auth/logout'),
   /** Get current user profile */

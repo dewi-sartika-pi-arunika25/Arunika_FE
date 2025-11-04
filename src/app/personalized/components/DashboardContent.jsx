@@ -120,9 +120,6 @@ export default function DashboardContent({ filters = null }) {
         {/* Metrics Grid - Redesign dengan icon dan layout lebih baik */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { title: "Role Fit", value: pct(roleFitInfo.fit || roleFit), color: "#E4B200", icon: Target, bgGradient: "from-yellow-50 to-yellow-100" },
-            { title: "Level Kompetensi", value: competenceLevel, color: "#E4B200", icon: TrendingUp, bgGradient: "from-green-50 to-green-100" },
-            { title: "Skill Gap", value: pct(levelSkillGap), color: "#FF8C00", icon: BarChart3, bgGradient: "from-orange-50 to-orange-100" },
             { 
               title: "Role Cocok", 
               value: recommendedRole === "Frontend Developer" ? "Frontend" : 
@@ -133,6 +130,10 @@ export default function DashboardContent({ filters = null }) {
               icon: Sparkles,
               bgGradient: "from-blue-50 to-blue-100"
             },
+            { title: "Role Fit", value: pct(roleFitInfo.fit || roleFit), color: "#E4B200", icon: Target, bgGradient: "from-yellow-50 to-yellow-100" },
+            { title: "Level Kompetensi", value: competenceLevel, color: "#E4B200", icon: TrendingUp, bgGradient: "from-green-50 to-green-100" },
+            { title: "Skill Gap", value: pct(levelSkillGap), color: "#FF8C00", icon: BarChart3, bgGradient: "from-orange-50 to-orange-100" },
+            
           ].map((item, i) => {
             const Icon = item.icon;
             return (
