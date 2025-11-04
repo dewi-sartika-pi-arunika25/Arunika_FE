@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="footer-container">
         <div className="footer-grid">
           <div className="col-span-2 md:col-span-1">
-            <img src="/logo.png" alt="Arunika" className="h-12 w-auto" />
+            <img src="/logo-arunika.svg" alt="Arunika" className="h-12 w-auto" />
             <p className="mt-4 text-base leading-relaxed max-w-xs footer-text">
               Playlist karir personalmu untuk masa depan yang lebih cerah.
             </p>

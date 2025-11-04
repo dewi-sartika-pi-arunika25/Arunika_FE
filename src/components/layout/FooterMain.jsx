@@ -17,7 +17,7 @@ export default function FooterMain() {
         <div className="grid items-start gap-10 md:grid-cols-3">
           {/* Brand */}
           <div>
-            <img src="/logo.png" alt="Arunika" className="h-11 w-auto" />
+            <img src="/logo-arunika.svg" alt="Arunika" className="h-11 w-auto" />
             <p className="mt-4 max-w-xs text-[15px] leading-relaxed">
               Playlist karier personal untuk masa depan yang lebih cerah.
             </p>

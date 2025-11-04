@@ -57,25 +57,30 @@ export function useAnalisisAI() {
     return shouldUseStaticAnalysis(aiStatus, hasAIInsight);
   }, [aiStatus, hasAIInsight]);
 
+  // Get recommended role for static analysis
+  const recommendedRole = useMemo(() => {
+    return roleFit?.role || null;
+  }, [roleFit]);
+
   // Get AI insight - use static if AI not ready, otherwise use real AI insight
   const aiInsight = useMemo(() => {
     if (useStatic) {
-      return getStaticAIAnalysis();
+      return getStaticAIAnalysis(recommendedRole);
     }
     return profile?.ai_insight || null;
-  }, [useStatic, profile?.ai_insight]);
+  }, [useStatic, profile?.ai_insight, recommendedRole]);
 
   // Create profile with static fallback
   const profileWithFallback = useMemo(() => {
     if (useStatic && !hasAIInsight) {
       return {
         ...profile,
-        ai_insight: getStaticAIAnalysis(),
+        ai_insight: getStaticAIAnalysis(recommendedRole),
         _isStaticFallback: true // Flag to indicate this is static data
       };
     }
     return profile;
-  }, [profile, useStatic, hasAIInsight]);
+  }, [profile, useStatic, hasAIInsight, recommendedRole]);
 
   return {
     profile: profileWithFallback,
