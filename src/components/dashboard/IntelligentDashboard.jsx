@@ -8,7 +8,7 @@ import Tabs from "./parts/Tabs";
 import SummaryCard from "./parts/SummaryCard";
 import SkillRow from "./parts/SkillRow";
 import JobRow from "./parts/JobRow";
-import { useApproachReveal } from "@/hooks/useMotionPresets"; // ✅ pakai in-view, bukan scroll-dir
+import { useApproachReveal } from "@/hooks/useMotionPresets";
 
 export default function IntelligentDashboard() {
   const rightRef = useRef(null);
@@ -87,10 +87,10 @@ export default function IntelligentDashboard() {
                 Coach bertenaga AI memetakan tujuanmu, menemukan kecocokan, dan memberi alat yang jelas untuk maju.
               </p>
 
-              <div className="mt-6 flex flex-wrap items-center gap-3">
+              <div className="mt-6 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
                 <button
                   onClick={goMatches}
-                  className="inline-flex items-center rounded-full px-6 py-3 text-sm font-semibold text-white transition hover:scale-[1.02]"
+                  className="inline-flex items-center justify-center rounded-full px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white transition hover:scale-[1.02]"
                   style={{
                     background:
                       "linear-gradient(90deg, color-mix(in oklab, var(--primary) 95%, black), var(--primary))",
@@ -102,7 +102,7 @@ export default function IntelligentDashboard() {
 
                 <a
                   href="#keunggulan"
-                  className="inline-flex items-center rounded-full px-6 py-3 text-sm font-medium border transition hover:bg-white/10"
+                  className="inline-flex items-center justify-center rounded-full px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border transition hover:bg-white/10"
                   style={{
                     color: "var(--text)",
                     borderColor: "color-mix(in oklab, var(--text) 45%, transparent)",

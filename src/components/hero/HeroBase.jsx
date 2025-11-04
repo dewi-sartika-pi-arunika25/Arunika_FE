@@ -1,6 +1,7 @@
 "use client";
-import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useThrottle } from "@/hooks/useThrottle";
 import CTAButton from "./CTAButton";
 
 export default function HeroBase({
@@ -14,28 +15,44 @@ export default function HeroBase({
   scrollLink,
 }) {
   const ref = useRef(null);
+  const shouldReduceMotion = useReducedMotion();
   const alignText = align === "left" ? "text-left items-start" : "text-center items-center";
   const [visible, setVisible] = useState(true);
   const lastY = useRef(0);
 
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || 0;
-      const up = y < lastY.current;
-      const nearTop = y <= 24;
-      setVisible(nearTop || up);
-      lastY.current = y;
-    };
-    onScroll();
-    addEventListener("scroll", onScroll, { passive: true });
-    return () => removeEventListener("scroll", onScroll);
+  // Throttle scroll handler to improve performance
+  const handleScroll = useCallback(() => {
+    const y = window.scrollY || 0;
+    const up = y < lastY.current;
+    const nearTop = y <= 24;
+    setVisible(nearTop || up);
+    lastY.current = y;
   }, []);
 
+  const throttledScroll = useThrottle(handleScroll, 100);
+
+  useEffect(() => {
+    // Initial check
+    handleScroll();
+    window.addEventListener("scroll", throttledScroll, { passive: true });
+    return () => window.removeEventListener("scroll", throttledScroll);
+  }, [throttledScroll, handleScroll]);
+
+  // Optimize scroll transforms with reduced motion support
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const bgScale = useTransform(scrollYProgress, [0, 1], [1, 1.12]);
-  const bgY = useTransform(scrollYProgress, [0, 1], [0, 48]);
-  const titleY = useTransform(scrollYProgress, [0, 1], [0, -14]);
-  const subtitleOpacity = useTransform(scrollYProgress, [0, 0.25, 1], [1, 1, 0.85]);
+  
+  // Create transforms only once (useTransform hooks must be called at top level)
+  const bgScale = shouldReduceMotion ? 1 : useTransform(scrollYProgress, [0, 1], [1, 1.12]);
+  const bgY = shouldReduceMotion ? 0 : useTransform(scrollYProgress, [0, 1], [0, 48]);
+  const titleY = shouldReduceMotion ? 0 : useTransform(scrollYProgress, [0, 1], [0, -14]);
+  const subtitleOpacity = shouldReduceMotion ? 1 : useTransform(scrollYProgress, [0, 0.25, 1], [1, 1, 0.85]);
+  
+  const transforms = useMemo(() => ({
+    bgScale,
+    bgY,
+    titleY,
+    subtitleOpacity,
+  }), [bgScale, bgY, titleY, subtitleOpacity]);
 
   return (
     <section
@@ -44,6 +61,7 @@ export default function HeroBase({
       aria-label="Bagian pembuka"
       className="relative w-screen mx-[calc(50%-50vw)] overflow-hidden"
       style={{
+        position: 'relative', // Fix for scroll offset calculation
         marginTop: "calc(var(--nav-h,72px) * -1)",
         paddingTop: navOffset ? "calc(var(--nav-h,72px) + 24px)" : undefined,
       }}
@@ -53,7 +71,7 @@ export default function HeroBase({
           <motion.div
             aria-hidden
             className="absolute inset-0 -z-20 bg-center bg-cover will-change-transform"
-            style={{ backgroundImage: `url(${bgUrl})`, top: 0, height: "100%", scale: bgScale, y: bgY }}
+            style={{ backgroundImage: `url(${bgUrl})`, top: 0, height: "100%", scale: transforms.bgScale, y: transforms.bgY }}
           />
           <div
             aria-hidden
@@ -77,7 +95,7 @@ export default function HeroBase({
               exit={{ opacity: 0, y: -16, scale: 0.995 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
               className={`wrap w-full mx-auto flex flex-col ${alignText} gap-7 max-w-[1120px]`}
-              style={{ y: titleY }}
+              style={{ y: transforms.titleY }}
             >
               {eyebrow && (
                 <p className="uppercase tracking-[0.18em] text-[11px] sm:text-xs" style={{ color: "var(--accent-2)" }}>
@@ -94,7 +112,7 @@ export default function HeroBase({
                   viewport={{ once: true, amount: 0.6 }}
                   transition={{ duration: 0.4, ease: "easeOut" }}
                   className="mx-auto w-full max-w-[1000px] space-y-5"
-                  style={{ opacity: subtitleOpacity, color: "color-mix(in oklab, var(--text) 90%, transparent)" }}
+                  style={{ opacity: transforms.subtitleOpacity, color: "color-mix(in oklab, var(--text) 90%, transparent)" }}
                 >
                   {subtitle}
                 </motion.div>

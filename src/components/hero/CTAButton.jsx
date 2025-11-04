@@ -1,8 +1,8 @@
 "use client";
 import { motion } from "framer-motion";
-import { useRef } from "react";
+import { useRef, memo } from "react";
 
-export default function CTAButton({ label, href = "#", onClick, variant }) {
+function CTAButton({ label, href = "#", onClick, variant }) {
   const btnRef = useRef(null);
   const isSecondary = variant === "secondary";
 
@@ -57,3 +57,5 @@ export default function CTAButton({ label, href = "#", onClick, variant }) {
     </motion.a>
   );
 }
+
+export default memo(CTAButton);

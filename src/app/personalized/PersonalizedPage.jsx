@@ -17,7 +17,6 @@ export default function PersonalizedPage() {
   const searchParams = useSearchParams();
   const userId = searchParams.get("id");
   
-  // ✅ Use Zustand store instead of local state
   const activeMenu = usePersonalizedStore((state) => state.activeMenu);
   const setActiveMenu = usePersonalizedStore((state) => state.setActiveMenu);
   const isProfileModalOpen = usePersonalizedStore((state) => state.isProfileModalOpen);
@@ -68,7 +67,7 @@ export default function PersonalizedPage() {
       />
 
       {/* Main Area */}
-      <main className="flex-1 flex flex-col overflow-y-auto">
+      <main className="flex-1 flex flex-col overflow-y-auto pb-16 lg:pb-0">
         {/* === HEADER DI SINI === */}
         <Header 
           userProfile={userProfile}

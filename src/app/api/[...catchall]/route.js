@@ -1,11 +1,6 @@
-// Catchall route untuk proxy semua /api/* requests ke backend
-// Kecuali routes yang sudah di-handle oleh Next.js route handlers spesifik
 import { NextResponse } from 'next/server';
 import { logInfo, logError } from '@/lib/utils/logger';
 
-// Use environment variable for backend URL
-// Note: In Next.js App Router, server components read env at build time
-// For runtime env, use NEXT_PUBLIC_ prefix
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 // Debug: Log backend URL in development
@@ -46,9 +41,6 @@ async function proxyRequest(request, context) {
       ? urlPath.slice(4)  // Remove '/api'
       : urlPath;
     
-    // Skip routes yang sudah di-handle oleh Next.js
-    // (provinces, cities, reset-password)
-    // Note: 'auth' removed from skipRoutes because it must be proxied to backend
     const skipRoutes = ['provinces', 'cities', 'reset-password'];
     const firstSegment = path.split('/').filter(Boolean)[0]; // filter(Boolean) removes empty strings
     

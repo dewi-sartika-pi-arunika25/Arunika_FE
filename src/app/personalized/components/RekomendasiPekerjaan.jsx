@@ -7,7 +7,6 @@ import { Briefcase, ExternalLink, Loader, AlertCircle } from "lucide-react";
 import Image from "next/image";
 
 export default function RekomendasiPekerjaan() {
-  // ✅ Semua logic dipindahkan ke useRekomendasiPekerjaan hook
   const {
     formattedJobs,
     loading,

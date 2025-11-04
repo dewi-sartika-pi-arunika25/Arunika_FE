@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { User, Mail, Lock, ArrowRight, Chrome, Home, Eye, EyeOff } from 'lucide-react'; 
-import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { authAPI } from '@/lib/api'; // ✅ FIX: sebelumnya '@/app/lib/api'
+import { authAPI } from '@/lib/api';
 import { FcGoogle } from "react-icons/fc";
 import { useAuthStore } from "@/lib/store/auth";
+import { useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { getOAuthRedirectUrl } from "@/lib/utils/oauth";
 
 
 const Separator = () => (
@@ -28,6 +30,7 @@ const Separator = () => (
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const login = useAuthStore((state) => state.login);
   const [formData, setFormData] = useState({
     name: '',
@@ -40,6 +43,63 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Handle OAuth callback from backend
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    const successParam = searchParams.get('success');
+    const accessToken = searchParams.get('access_token');
+    const refreshToken = searchParams.get('refresh_token');
+    const userId = searchParams.get('user_id');
+    const hasAssessment = searchParams.get('has_assessment') === 'true';
+
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam));
+      return;
+    }
+
+    // Handle successful OAuth callback
+    if (successParam === 'true' && accessToken && refreshToken) {
+      handleOAuthCallback(accessToken, refreshToken, userId, hasAssessment);
+    }
+  }, [searchParams]);
+  
+  const handleOAuthCallback = async (accessToken, refreshToken, userId, hasAssessment) => {
+    try {
+      // Save tokens first to Zustand store
+      login({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: { id: userId },
+        profile: { user_id: userId },
+      });
+
+      // Try to get user profile from backend (optional)
+      try {
+        const meResponse = await authAPI.me();
+        if (meResponse?.data?.success) {
+          login({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            user: meResponse.data.data.auth_user,
+            profile: meResponse.data.data.profile,
+          });
+        }
+      } catch (profileErr) {
+        console.warn('Failed to fetch profile, using tokens only:', profileErr);
+      }
+
+      // Redirect based on assessment status
+      if (hasAssessment) {
+        router.push('/personalized');
+      } else {
+        router.push('/skill-match');
+      }
+    } catch (err) {
+      console.error('OAuth callback error:', err);
+      setError("Gagal memuat profil. Silakan coba lagi.");
+    }
+  };
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -73,12 +133,21 @@ export default function RegisterPage() {
       });
 
       if (response.data.success) {
-        // ✅ Simpan ke Zustand store (otomatis persist ke localStorage)
         login(response.data.data);
 
-        setSuccess('Pendaftaran berhasil! Anda akan diarahkan ke skillmatch...');
+        // Redirect berdasarkan apakah user sudah punya assessment data
+        const hasAssessment = response.data.data?.has_assessment || false;
+        const redirectMessage = hasAssessment 
+          ? 'Pendaftaran berhasil! Anda akan diarahkan ke dashboard...'
+          : 'Pendaftaran berhasil! Anda akan diarahkan ke skill-match...';
+        
+        setSuccess(redirectMessage);
         setTimeout(() => {
-          router.push('/skill-match');
+          if (hasAssessment) {
+            router.push('/personalized');
+          } else {
+            router.push('/skill-match');
+          }
         }, 2000);
       }
     } catch (err) {
@@ -90,8 +159,7 @@ export default function RegisterPage() {
   };
 
   const handleGoogleSignIn = () => {
-    // ✅ Updated to use /api/nextauth path
-    signIn('google', { callbackUrl: '/personalized' });
+    window.location.href = getOAuthRedirectUrl('register');
   };
 
     return (

@@ -12,12 +12,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
-import { signIn, useSession, getSession } from "next-auth/react";
+import { Mail, Lock, LogIn,Eye, EyeOff, Home } from "lucide-react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
 import { FcGoogle } from "react-icons/fc";
 import { useAuthStore } from "@/lib/store/auth";
+import { getOAuthRedirectUrl } from "@/lib/utils/oauth";
 
 const Separator = () => (
   <div className="relative my-4">
@@ -36,61 +36,66 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const login = useAuthStore((state) => state.login);
-  const { data: session, status } = useSession();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Handle OAuth callback and error
+  // Handle OAuth callback from backend
   useEffect(() => {
     const errorParam = searchParams.get('error');
+    const successParam = searchParams.get('success');
+    const accessToken = searchParams.get('access_token');
+    const refreshToken = searchParams.get('refresh_token');
+    const userId = searchParams.get('user_id');
+    const hasAssessment = searchParams.get('has_assessment') === 'true';
+
     if (errorParam) {
-      setError("Terjadi kesalahan saat login dengan Google. Silakan coba lagi.");
+      setError(decodeURIComponent(errorParam));
       return;
     }
 
-    // Handle OAuth success - sync dengan backend dan login ke Zustand
-    const checkOAuthSession = async () => {
-      if (status === 'authenticated' && session) {
-        await handleOAuthSuccess(session);
-      }
-    };
-    
-    checkOAuthSession();
-  }, [searchParams, status]);
-
-  const handleOAuthSuccess = async (session) => {
+    // Handle successful OAuth callback
+    if (successParam === 'true' && accessToken && refreshToken) {
+      handleOAuthCallback(accessToken, refreshToken, userId, hasAssessment);
+    }
+  }, [searchParams]);
+  
+  const handleOAuthCallback = async (accessToken, refreshToken, userId, hasAssessment) => {
     try {
-      // Get tokens from NextAuth session
-      const { accessToken, refreshToken } = session;
-      
-      if (accessToken && refreshToken) {
-        // Tokens sudah ada dari NextAuth, langsung simpan ke Zustand
-        login({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          user: session.user,
-          profile: session.user,
-        });
-        
-        // Redirect ke skill-match
-        router.push('/skill-match');
-      } else {
-        // Tokens belum ada, perlu sync dengan backend
-        const response = await authAPI.register({
-          name: session.user.name || session.user.email,
-          email: session.user.email,
-          password: `oauth_${session.user.id}_${Date.now()}`,
-        });
+      // Save tokens first to Zustand store
+      login({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: { id: userId },
+        profile: { user_id: userId },
+      });
 
-        if (response?.data?.success) {
-          login(response.data.data);
-          router.push('/skill-match');
+      // Try to get user profile from backend (optional, can redirect without it)
+      try {
+        const meResponse = await authAPI.me();
+        if (meResponse?.data?.success) {
+          // Update with full profile data
+          login({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            user: meResponse.data.data.auth_user,
+            profile: meResponse.data.data.profile,
+          });
         }
+      } catch (profileErr) {
+        console.warn('Failed to fetch profile, using tokens only:', profileErr);
+        // Continue with tokens only
+      }
+
+      // Redirect based on assessment status
+      if (hasAssessment) {
+        router.push('/personalized');
+      } else {
+        router.push('/skill-match');
       }
     } catch (err) {
-      console.error('OAuth sync error:', err);
-      setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
+      console.error('OAuth callback error:', err);
+      setError("Gagal memuat profil. Silakan coba lagi.");
     }
   };
 
@@ -99,6 +104,8 @@ export default function LoginPage() {
     setFormData((prev) => ({ ...prev, [id]: value }));
     setError("");
   };
+  
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -108,11 +115,15 @@ export default function LoginPage() {
     try {
       const response = await authAPI.login(formData.email, formData.password);
       if (response?.data?.success) {
-        // ✅ Simpan ke Zustand store (otomatis persist ke localStorage)
         login(response.data.data);
 
-        // Redirect ke skill-match
-        router.push("/skill-match");
+        // Redirect berdasarkan apakah user sudah punya assessment data
+        const hasAssessment = response.data.data?.has_assessment || false;
+        if (hasAssessment) {
+          router.push("/personalized");
+        } else {
+          router.push("/skill-match");
+        }
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
@@ -148,12 +159,7 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = () => {
-    // ✅ Updated to use /api/nextauth path
-    // Explicitly set basePath to ensure client knows about custom path
-    signIn("google", { 
-      callbackUrl: "/personalized",
-      redirect: true
-    });
+    window.location.href = getOAuthRedirectUrl('login');
   };
 
   return (
@@ -224,17 +230,31 @@ export default function LoginPage() {
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+  
                 <Input
-                  id="password"
-                  type="password"
-                  placeholder="Masukkan kata sandi Anda"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Masukkan kata sandi Anda"
+                value={formData.password}
+                onChange={handleChange}
+                required
+               className="pl-10 pr-10"
+               disabled={isLoading}
+               />
+
+               <button
+               type="button"
+               onClick={() => setShowPassword((prev) => !prev)}
+                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                   {showPassword ? (
+                 <EyeOff className="h-4 w-4" />
+                 ) : (
+                <Eye className="h-4 w-4" />
+                )}
+             </button>
+            </div>
+
             </div>
 
             <Button type="submit" className="w-full mt-2" disabled={isLoading}>

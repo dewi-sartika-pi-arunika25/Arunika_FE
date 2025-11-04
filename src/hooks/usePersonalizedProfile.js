@@ -1,5 +1,5 @@
 // hooks/usePersonalizedProfile.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { personalizedAPI, recommendationsAPI, skillupAPI, usersAPI, assessmentAPI } from '@/lib/api';
 import { logWarning, logError } from '@/lib/utils/logger';
@@ -648,31 +648,76 @@ function synthesizeSkillGaps(strengthsObj) {
   }));
 }
 
-// ============================================
-// PHASE 2 PLACEHOLDER (untuk AI integration nanti)
-// ============================================
-
 /**
- * Placeholder untuk AI analysis
- * Nanti akan di-call oleh separate AI hook
- * Misalnya: useAIAnalysis(profile, jobRecommendations, skillRecommendations)
+ * AI Analysis Hook dengan RAG + Gemini + LangChain
+ * 
+ * Backend menggunakan:
+ * - LangChain untuk orchestration AI calls
+ * - Google Gemini API untuk LLM generation
+ * - RAG (Retrieval Augmented Generation) dengan vector embeddings:
+ *   1. Query di-embed menggunakan Gemini embeddings
+ *   2. Vector similarity search untuk retrieve relevant documents
+ *   3. Top 5 documents digunakan sebagai context untuk prompt
+ *   4. Gemini generate analysis dengan RAG context
+ * 
+ * Caching:
+ * - Smart caching dengan 85% similarity threshold
+ * - Similar profiles akan reuse cached analysis
+ * 
+ * @param {string} personalizedId - ID dari personalized profile (rec_id)
+ * @param {boolean} autoFetch - Auto fetch saat mount (default: false)
+ * @returns {Object} { aiInsight, aiLoading, aiError, generateInsight, refreshAnalysis }
  */
-export function useAIAnalysis(profile, jobRecommendations, skillRecommendations) {
+export function useAIAnalysis(personalizedId, autoFetch = false) {
   const [aiInsight, setAiInsight] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
-  // TODO: Implement AI call ke Claude/GPT
-  // const generateInsight = async () => {
-  //   const response = await callAI({
-  //     profile,
-  //     jobRecommendations,
-  //     skillRecommendations
-  //   });
-  //   setAiInsight(response);
-  // };
+  const generateInsight = useCallback(async (forceRefresh = false) => {
+    if (!personalizedId) {
+      setAiError('Personalized ID is required');
+      return null;
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      const response = await personalizedAPI.refreshAIAnalysis(personalizedId);
+      
+      if (response?.data?.success) {
+        const analysis = response.data.data?.ai_analysis || 
+                        response.data.data?.analysis ||
+                        response.data.data;
+        setAiInsight(analysis);
+        return analysis;
+      } else {
+        throw new Error(response?.data?.error || 'Failed to generate AI analysis');
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.error || 
+                          error?.response?.data?.message ||
+                          error?.message || 
+                          'Gagal generate AI analysis. Silakan coba lagi.';
+      setAiError(errorMessage);
+      console.error('AI Analysis error:', error);
+      throw error;
+    } finally {
+      setAiLoading(false);
+    }
+  }, [personalizedId]);
+
+  useEffect(() => {
+    if (autoFetch && personalizedId && !aiInsight && !aiLoading) {
+      generateInsight();
+    }
+  }, [autoFetch, personalizedId, aiInsight, aiLoading, generateInsight]);
 
   return {
     aiInsight,
-    aiLoading
+    aiLoading,
+    aiError,
+    generateInsight,
+    refreshAnalysis: () => generateInsight(true),
   };
 }

@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 
 export default function RekomendasiSkillUp() {
-  // ✅ Semua logic dipindahkan ke useRekomendasiSkillUp hook
   const {
     recommendations,
     loading,

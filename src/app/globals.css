@@ -191,6 +191,17 @@
 
   .reveal-hide { opacity: 0; transform: translateY(12px) scale(.98); }
   .reveal-in { opacity: 1; transform: translateY(0) scale(1); transition: opacity .6s ease var(--reveal-delay, 0ms), transform .6s ease var(--reveal-delay, 0ms); }
+  
+  /* Set reveal delays via CSS nth-child to avoid hydration mismatch */
+  .reveal:nth-child(1) { --reveal-delay: 0ms; }
+  .reveal:nth-child(2) { --reveal-delay: 60ms; }
+  .reveal:nth-child(3) { --reveal-delay: 120ms; }
+  .reveal:nth-child(4) { --reveal-delay: 180ms; }
+  .reveal:nth-child(5) { --reveal-delay: 240ms; }
+  .reveal:nth-child(6) { --reveal-delay: 300ms; }
+  .reveal:nth-child(7) { --reveal-delay: 360ms; }
+  .reveal:nth-child(8) { --reveal-delay: 420ms; }
+  .reveal:nth-child(n+9) { --reveal-delay: 480ms; }
 
   .cta-ripple {
     position: absolute;
