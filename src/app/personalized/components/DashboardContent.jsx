@@ -9,6 +9,7 @@ import {
   PieChart,
   TrendingUp,
   ArrowRight,
+  Zap,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -50,9 +51,6 @@ export default function DashboardContent({ filters = null }) {
     nextSteps,
     chartColors,
     pct,
-    refreshAIAnalysis,
-    refreshingAI,
-    aiStatus,
   } = useDashboardLogic();
 
   // Apply filters jika tersedia
@@ -135,36 +133,19 @@ export default function DashboardContent({ filters = null }) {
                   metrik utama berdasarkan analisis AI.
                 </p>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={async () => {
-                    try {
-                      await refreshAIAnalysis('summary');
-                    } catch (err) {
-                      console.error('Error refreshing AI analysis:', err);
-                      alert('Gagal refresh analisis AI. Silakan coba lagi.');
-                    }
-                  }}
-                  disabled={refreshingAI || aiStatus === 'pending'}
-                  className="px-4 py-2 rounded-xl text-white font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  style={{ backgroundColor: '#E4B200' }}
-                >
-                  {refreshingAI ? (
-                    <>
-                      <Loader className="h-4 w-4 animate-spin" />
-                      Memproses...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Refresh Analisis AI
-                    </>
-                  )}
-                </button>
-                <button className="px-4 py-2 rounded-xl border border-[#E4B200] text-[#2C2C2C] hover:bg-[#FFF6DC] transition-colors">
-                  Export
-                </button>
-              </div>
+                  <div className="flex gap-3">
+                    <button
+                      className="px-4 py-2 rounded-xl text-white font-semibold shadow-sm transition-all flex items-center gap-2 cursor-default opacity-80"
+                      style={{ backgroundColor: '#E4B200' }}
+                      disabled
+                    >
+                      <Zap className="h-4 w-4" />
+                      Take Action
+                    </button>
+                    <button className="px-4 py-2 rounded-xl border border-[#E4B200] text-[#2C2C2C] hover:bg-[#FFF6DC] transition-colors">
+                      Export
+                    </button>
+                  </div>
             </div>
           </CardContent>
         </Card>
@@ -516,11 +497,17 @@ export default function DashboardContent({ filters = null }) {
             {/* Button untuk navigate ke AnalisisAI */}
             <div className="mt-4 pt-4 border-t border-[#E4B200]/20">
               <button
-                onClick={() => {
-                  const currentUrl = new URL(window.location.href);
-                  const idParam = currentUrl.searchParams.get('id') || '';
-                  window.location.href = `/personalized?id=${idParam}&menu=analisis`;
-                }}
+                  onClick={() => {
+                    const currentUrl = new URL(window.location.href);
+                    const recIdParam = currentUrl.searchParams.get('rec_id') || profile?.rec_id || '';
+                    const idParam = currentUrl.searchParams.get('id') || profile?.id || '';
+                    const param = recIdParam || idParam;
+                    if (param) {
+                      window.location.href = `/personalized?rec_id=${param}&menu=analisis`;
+                    } else {
+                      window.location.href = '/personalized?menu=analisis';
+                    }
+                  }}
                 className="w-full px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-300 text-center relative overflow-hidden"
                 style={{ 
                   background: 'linear-gradient(135deg, rgba(228, 178, 0, 0.15) 0%, rgba(255, 216, 77, 0.2) 100%)',
@@ -581,8 +568,14 @@ export default function DashboardContent({ filters = null }) {
                       // Navigate ke rec_pekerjaan dengan query parameter
                       const roleParam = encodeURIComponent(j.name);
                       const currentUrl = new URL(window.location.href);
-                      const idParam = currentUrl.searchParams.get('id') || '';
-                      window.location.href = `/personalized?id=${idParam}&menu=rekom-pekerjaan&role=${roleParam}`;
+                      const recIdParam = currentUrl.searchParams.get('rec_id') || profile?.rec_id || '';
+                      const idParam = currentUrl.searchParams.get('id') || profile?.id || '';
+                      const param = recIdParam || idParam;
+                      if (param) {
+                        window.location.href = `/personalized?rec_id=${param}&menu=rekom-pekerjaan&role=${roleParam}`;
+                      } else {
+                        window.location.href = `/personalized?menu=rekom-pekerjaan&role=${roleParam}`;
+                      }
                     }}
                     className="flex items-center justify-between p-3 rounded-lg bg-[#FFFDF5] border border-[#F4E8BB] cursor-pointer hover:bg-[#FFF6DC] transition-colors"
                   >

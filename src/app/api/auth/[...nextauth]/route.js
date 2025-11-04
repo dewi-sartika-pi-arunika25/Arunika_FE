@@ -54,6 +54,9 @@ const handler = NextAuth({
   ],
   secret: process.env.NEXTAUTH_SECRET,
   
+  // Set NEXTAUTH_URL explicitly to prevent CLIENT_FETCH_ERROR
+  ...(process.env.NEXTAUTH_URL && { url: process.env.NEXTAUTH_URL }),
+  
   // ✅ Use default path /api/auth (no basePath)
   pages: {
     signIn: '/login',
@@ -85,26 +88,54 @@ const handler = NextAuth({
               email: user.email,
               password: `oauth_${user.id}_${Date.now()}`,
             }),
+            // Add timeout to prevent hanging
+            signal: AbortSignal.timeout(10000), // 10 seconds timeout
           });
 
           // If registration fails, try login instead (user might already exist)
           if (!response.ok) {
             console.log('Registration failed, trying login...');
-            const loginResponse = await fetch(`${API_BASE_URL}/auth/login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email: user.email,
-                password: `oauth_${user.id}_${Date.now()}`,
-              }),
-            });
-            
-            if (!loginResponse.ok) {
-              console.warn('OAuth sync failed, but allowing sign in');
+            try {
+              const loginResponse = await fetch(`${API_BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: user.email,
+                  password: `oauth_${user.id}_${Date.now()}`,
+                }),
+              });
+              
+              if (!loginResponse.ok) {
+                const contentType = loginResponse.headers.get('content-type');
+                const isJSON = contentType && contentType.includes('application/json');
+                
+                if (!isJSON) {
+                  const text = await loginResponse.text().catch(() => '');
+                  if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                    console.error('❌ OAuth login: Backend tidak berjalan!');
+                    console.error('   URL yang dicoba:', `${API_BASE_URL}/auth/login`);
+                    console.error('   Pastikan backend berjalan di', API_BASE_URL);
+                  } else {
+                    console.warn('OAuth login failed - non-JSON response:', text.substring(0, 200));
+                  }
+                } else {
+                  const errorData = await loginResponse.json().catch(() => ({}));
+                  console.warn('OAuth login failed:', errorData);
+                }
+              }
+            } catch (loginError) {
+              console.warn('OAuth login attempt error:', loginError.message);
             }
           }
         } catch (error) {
-          console.error('OAuth sync error:', error);
+          // Handle fetch errors gracefully
+          if (error.name === 'AbortError') {
+            console.warn('⚠️ OAuth sync: Backend request timeout');
+          } else if (error.message?.includes('fetch')) {
+            console.warn('⚠️ OAuth sync: Backend not reachable:', error.message);
+          } else {
+            console.error('OAuth sync error:', error.message || error);
+          }
         }
       }
       
@@ -112,13 +143,19 @@ const handler = NextAuth({
     },
 
     async jwt({ token, user, account, trigger }) {
-      console.log('🔄 JWT callback triggered:', { 
-        hasUser: !!user, 
-        hasAccount: !!account, 
-        provider: account?.provider,
-        trigger,
-        isSignIn: !!user && !!account
-      });
+      // Only log detail for actual sign-in events, not for session validation
+      const isSignIn = !!user && !!account;
+      
+      if (isSignIn) {
+        console.log('🔄 JWT callback: Sign-in event', { 
+          provider: account?.provider,
+          email: user?.email,
+          trigger
+        });
+      } else if (trigger === 'update') {
+        console.log('🔄 JWT callback: Token update triggered');
+      }
+      // Silent for normal session validation (no user/account)
       
       // Initial sign in - store tokens from backend
       if (account?.provider === 'google' && user) {
@@ -148,9 +185,20 @@ const handler = NextAuth({
               email: user.email,
               password: `oauth_${user.id}_${Date.now()}`,
             }),
+            // Add timeout to prevent hanging
+            signal: AbortSignal.timeout(10000), // 10 seconds timeout
           });
 
-          if (response.ok) {
+          // Check if backend is reachable
+          if (!response) {
+            console.warn('⚠️ JWT callback: Backend tidak merespons - pastikan backend berjalan di', API_BASE_URL);
+            return;
+          }
+
+          const contentType = response.headers.get('content-type');
+          const isJSON = contentType && contentType.includes('application/json');
+
+          if (response.ok && isJSON) {
             const data = await response.json();
             console.log('✅ JWT callback: Backend registration successful');
             if (data?.data?.access_token) {
@@ -163,20 +211,44 @@ const handler = NextAuth({
               console.warn('⚠️ JWT callback: No tokens in response data');
             }
           } else {
-            const errorData = await response.json().catch(() => ({}));
-            console.warn('⚠️ JWT callback: Registration failed (user might exist):', errorData);
+            // Backend mengembalikan HTML atau error page
+            if (!isJSON) {
+              const text = await response.text().catch(() => '');
+              if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                console.error('❌ JWT callback: Backend tidak berjalan atau endpoint tidak ditemukan!');
+                console.error('   URL yang dicoba:', `${API_BASE_URL}/auth/register`);
+                console.error('   Response adalah HTML (bukan JSON) - pastikan backend berjalan');
+                console.error('   Status:', response.status, response.statusText);
+              } else {
+                console.warn('⚠️ JWT callback: Backend returned non-JSON response:', text.substring(0, 200));
+              }
+            } else {
+              const errorData = await response.json().catch(() => ({}));
+              console.warn('⚠️ JWT callback: Registration failed (user might exist):', errorData);
+            }
             // Don't fail - user info is already in token
           }
         } catch (error) {
-          console.error('❌ JWT callback: OAuth sync error:', error);
+          // Handle fetch errors gracefully (network errors, timeouts, etc.)
+          if (error.name === 'AbortError') {
+            console.warn('⚠️ JWT callback: Backend request timeout - continuing without sync');
+          } else if (error.message?.includes('fetch')) {
+            console.warn('⚠️ JWT callback: Backend not reachable - continuing without sync:', error.message);
+          } else {
+            console.error('❌ JWT callback: OAuth sync error:', error.message || error);
+          }
           // Don't fail - user info is already in token, cookie will still be set
         }
       }
 
-      console.log('✅ JWT callback: Returning token', { 
-        hasEmail: !!token.email,
-        hasSub: !!token.sub 
-      });
+      // Only log on sign-in or if token is missing critical data
+      if (isSignIn || !token.email) {
+        console.log('✅ JWT callback: Returning token', { 
+          hasEmail: !!token.email,
+          hasSub: !!token.sub,
+          isSignIn
+        });
+      }
       return token;
     },
 
@@ -213,9 +285,17 @@ const handler = NextAuth({
         session.user.id = token.sub;
       }
       
+      // Pass has_assessment from token to session
+      if (token.user?.has_assessment !== undefined) {
+        session.user.has_assessment = token.user.has_assessment;
+      } else if (token.profile?.has_assessment !== undefined) {
+        session.user.has_assessment = token.profile.has_assessment;
+      }
+      
       console.log('✅ Session callback result:', { 
         email: session.user.email,
-        hasAccessToken: !!session.accessToken 
+        hasAccessToken: !!session.accessToken,
+        hasAssessment: session.user.has_assessment || false
       });
       
       return session;

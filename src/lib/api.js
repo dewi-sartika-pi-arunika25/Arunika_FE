@@ -45,6 +45,10 @@ api.interceptors.response.use(
     if (error?.response?.status === 401 && originalRequest && typeof originalRequest === 'object' && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      // Get toast instance outside try-catch for error handling
+      const toast = getToast();
+      let loadingId = null;
+      
       try {
         const { refreshToken, setTokens, logout } = useAuthStore.getState();
         
@@ -52,13 +56,17 @@ api.interceptors.response.use(
         // Backend akan handle refresh via cookie jika tersedia
         
         // Show loading toast while refreshing
-        const toast = getToast();
-        const loadingId = toast.loading('Memperbarui sesi...', { duration: 0 });
+        loadingId = toast.loading('Memperbarui sesi...', { duration: 0 });
 
         // Try refresh with cookie first (backend will use cookie if available)
         // If cookie not available, use refreshToken from state
+        // If no refresh token at all, reject immediately
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+        
         const response = await axios.post(`${API_BASE_URL}/auth/refresh`, 
-          refreshToken ? { refresh_token: refreshToken } : {}
+          { refresh_token: refreshToken }
         );
 
         const { access_token, refresh_token } = response.data.data;
@@ -67,7 +75,9 @@ api.interceptors.response.use(
         setTokens(access_token, refresh_token);
 
         // Dismiss loading toast
-        toast.dismiss(loadingId);
+        if (loadingId) {
+          toast.dismiss(loadingId);
+        }
 
         if (originalRequest && typeof originalRequest === 'object') {
           if (!originalRequest.headers) {
@@ -77,15 +87,35 @@ api.interceptors.response.use(
         }
         return api(originalRequest);
       } catch (refreshError) {
-        // ✅ Clear auth state and redirect
-        const toast = getToast();
-        toast.error('Sesi Anda telah berakhir. Silakan login kembali.');
+        // Dismiss loading toast first
+        if (loadingId) {
+          try {
+            toast.dismiss(loadingId);
+          } catch (e) {
+            // Ignore if toast dismiss fails
+          }
+        }
         
-        useAuthStore.getState().logout();
+        // Handle different refresh error scenarios
+        const refreshStatus = refreshError?.response?.status;
         
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 1500);
+        // If 400 Bad Request, don't redirect - just reject (token might be invalid format)
+        if (refreshStatus === 400) {
+          console.warn('⚠️ Refresh token invalid (400). Original request will fail.');
+          return Promise.reject(refreshError);
+        }
+        
+        // For 401/403, redirect to login
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          const errorToast = getToast();
+          errorToast.error('Sesi Anda telah berakhir. Silakan login kembali.');
+          
+          useAuthStore.getState().logout();
+          
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1500);
+        }
         
         return Promise.reject(refreshError);
       }
