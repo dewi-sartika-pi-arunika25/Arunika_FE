@@ -150,7 +150,7 @@ export const animations = {
   },
   fadeUpBlur: {
     initial: { opacity: 0, y: 14, filter: 'blur(2px)' },
-    animate: { opacity: 1, y: 0, filter: 'blur(0)' },
+    animate: { opacity: 1, y: 0, filter: 'blur(0px)' },
     transition: { duration: 0.38, ease: 'easeOut' },
   },
   stagger: {

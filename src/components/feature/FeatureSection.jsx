@@ -5,7 +5,7 @@ import FeatureRows from "./FeatureRow";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 14, filter: "blur(2px)" },
-  show: { opacity: 1, y: 0, filter: "blur(0)", transition: { duration: 0.38, ease: "easeOut" } },
+  show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.38, ease: "easeOut" } },
 };
 
 const stagger = {

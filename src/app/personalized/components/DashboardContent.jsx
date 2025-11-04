@@ -50,6 +50,9 @@ export default function DashboardContent({ filters = null }) {
     nextSteps,
     chartColors,
     pct,
+    refreshAIAnalysis,
+    refreshingAI,
+    aiStatus,
   } = useDashboardLogic();
 
   // Apply filters jika tersedia
@@ -133,8 +136,30 @@ export default function DashboardContent({ filters = null }) {
                 </p>
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 rounded-xl text-white font-semibold shadow-sm hover:shadow-md transition-shadow" style={{ backgroundColor: '#E4B200' }}>
-                  Take Action
+                <button
+                  onClick={async () => {
+                    try {
+                      await refreshAIAnalysis('summary');
+                    } catch (err) {
+                      console.error('Error refreshing AI analysis:', err);
+                      alert('Gagal refresh analisis AI. Silakan coba lagi.');
+                    }
+                  }}
+                  disabled={refreshingAI || aiStatus === 'pending'}
+                  className="px-4 py-2 rounded-xl text-white font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  style={{ backgroundColor: '#E4B200' }}
+                >
+                  {refreshingAI ? (
+                    <>
+                      <Loader className="h-4 w-4 animate-spin" />
+                      Memproses...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Refresh Analisis AI
+                    </>
+                  )}
                 </button>
                 <button className="px-4 py-2 rounded-xl border border-[#E4B200] text-[#2C2C2C] hover:bg-[#FFF6DC] transition-colors">
                   Export

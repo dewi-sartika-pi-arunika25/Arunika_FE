@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
+import { Mail, Lock, LogIn, Home } from "lucide-react";
 import { signIn, useSession, getSession } from "next-auth/react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
@@ -32,126 +32,47 @@ const Separator = () => (
   </div>
 );
 
+const getRedirectPath = (hasAssessment) => hasAssessment ? '/personalized' : '/skill-match';
+
 export default function LoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const login = useAuthStore((state) => state.login);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const { data: session, status } = useSession();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const processingOAuthRef = useRef(false);
+  const hasProcessedRef = useRef(false);
 
-  // Handle OAuth callback and error
-  useEffect(() => {
-    const errorParam = searchParams.get('error');
-    const code = searchParams.get('code');
-    const callbackUrl = searchParams.get('callbackUrl');
-    
-    console.log('🔍 Login page loaded:', { errorParam, code, callbackUrl, status });
-    
-    // "OAuthCallback" is not an error, it's part of the OAuth flow
-    // Only show error for actual error codes
-    if (errorParam && errorParam !== 'OAuthCallback') {
-      console.error('❌ OAuth error from URL:', errorParam);
-      setError("Terjadi kesalahan saat login dengan Google. Silakan coba lagi.");
-    } else if (errorParam === 'OAuthCallback') {
-      console.log('ℹ️ OAuthCallback detected (not an error, just OAuth flow)');
+  const resetLoadingState = useCallback(() => {
+    processingOAuthRef.current = false;
+    setIsLoading(false);
+  }, []);
+
+  const redirectAfterAuth = useCallback((hasAssessment) => {
+    resetLoadingState();
+    window.location.href = getRedirectPath(hasAssessment);
+  }, [resetLoadingState]);
+
+  const handleOAuthSuccess = useCallback(async (session) => {
+    if (processingOAuthRef.current || hasProcessedRef.current) {
+      return;
     }
 
-    // Handle OAuth success - sync dengan backend dan login ke Zustand
-    const checkOAuthSession = async () => {
-      // Skip if already processing redirect
-      if (isLoading) {
-        console.log('⏸️ Already processing OAuth, skipping...');
-        return;
-      }
-      
-      if (status === 'authenticated' && session) {
-        console.log('✅ NextAuth session authenticated:', { 
-          user: session.user, 
-          hasTokens: !!(session.accessToken && session.refreshToken),
-          email: session.user?.email,
-          callbackUrl
-        });
-        setIsLoading(true); // Prevent multiple calls
-        await handleOAuthSuccess(session);
-      } else if (status === 'loading') {
-        console.log('⏳ NextAuth status: loading...', { code, callbackUrl, errorParam });
-        // Wait for session to be ready - useEffect will re-run when status changes
-      } else if (status === 'unauthenticated') {
-        // If we have callbackUrl or error=OAuthCallback, we're coming from OAuth - session might still be loading
-        if (callbackUrl || code || errorParam === 'OAuthCallback') {
-          console.log('⏳ OAuth callback detected, checking cookies...', { code, callbackUrl, errorParam });
-          
-          // Check if NextAuth session cookie exists
-          if (typeof document !== 'undefined') {
-            const cookies = document.cookie.split(';').reduce((acc, cookie) => {
-              const [key, value] = cookie.trim().split('=');
-              acc[key] = value;
-              return acc;
-            }, {});
-            
-            console.log('📋 Available cookies:', Object.keys(cookies));
-            console.log('🍪 NextAuth session cookie:', cookies['next-auth.session-token'] ? 'Found' : 'Not found');
-            console.log('🍪 Secure NextAuth session cookie:', cookies['__Secure-next-auth.session-token'] ? 'Found' : 'Not found');
-          }
-          
-          // Force session refresh after OAuth callback
-          if (errorParam === 'OAuthCallback' || callbackUrl) {
-            console.log('🔄 Forcing session refresh...');
-            // Try multiple times to get session (cookie might not be set immediately)
-            let attempts = 0;
-            const maxAttempts = 5;
-            
-            const checkSession = async () => {
-              attempts++;
-              try {
-                const refreshedSession = await getSession();
-                console.log(`🔄 Session refresh attempt ${attempts}/${maxAttempts}:`, { 
-                  hasSession: !!refreshedSession,
-                  email: refreshedSession?.user?.email 
-                });
-                
-                if (refreshedSession) {
-                  console.log('✅ Session found! Processing OAuth success...');
-                  // Session is ready, trigger handleOAuthSuccess
-                  await handleOAuthSuccess(refreshedSession);
-                } else if (attempts < maxAttempts) {
-                  // Try again after delay
-                  setTimeout(checkSession, 1000);
-                } else {
-                  console.warn('⚠️ Session not found after multiple attempts');
-                }
-              } catch (err) {
-                console.error('❌ Session refresh error:', err);
-                if (attempts < maxAttempts) {
-                  setTimeout(checkSession, 1000);
-                }
-              }
-            };
-            
-            // Start checking after initial delay
-            setTimeout(checkSession, 500);
-          }
-        } else {
-          console.log('ℹ️ NextAuth status: unauthenticated (no OAuth callback)');
-        }
-      }
-    };
-    
-    checkOAuthSession();
-  }, [searchParams, status, session, isLoading]);
+    if (isAuthenticated) {
+      const hasAssessment = useAuthStore.getState().user?.has_assessment || false;
+      redirectAfterAuth(hasAssessment);
+      return;
+    }
 
-  const handleOAuthSuccess = async (session) => {
+    processingOAuthRef.current = true;
+    setIsLoading(true);
+
     try {
-      console.log('🔄 Processing OAuth session...', { session });
-      
-      // Get tokens from NextAuth session
       const { accessToken, refreshToken } = session;
       
       if (accessToken && refreshToken) {
-        console.log('✅ Tokens found in NextAuth session, syncing to Zustand...');
-        // Tokens sudah ada dari NextAuth, langsung simpan ke Zustand
         login({
           access_token: accessToken,
           refresh_token: refreshToken,
@@ -159,84 +80,145 @@ export default function LoginPage() {
           profile: session.user,
         });
         
-        // Wait a bit for Zustand state to update and cookies to be set
         await new Promise(resolve => setTimeout(resolve, 200));
         
-        // Get assessment status and redirect
         try {
           const meResponse = await authAPI.me();
-          console.log('✅ me() response:', meResponse?.data);
           if (meResponse?.data?.success) {
             const hasAssessment = meResponse.data.data?.has_assessment || false;
-            const redirectPath = hasAssessment ? '/personalized' : '/skill-match';
-            console.log('🔀 Redirecting to:', redirectPath, 'hasAssessment:', hasAssessment);
-            // Use window.location for full page redirect to avoid redirect loop
-            window.location.href = redirectPath;
-            return;
-          } else {
-            console.log('⚠️ me() response not successful, redirecting to skill-match');
-            window.location.href = '/skill-match';
+            hasProcessedRef.current = true;
+            redirectAfterAuth(hasAssessment);
             return;
           }
         } catch (profileErr) {
-          console.warn('⚠️ Failed to fetch profile:', profileErr);
-          console.warn('⚠️ Error details:', {
-            status: profileErr?.response?.status,
-            data: profileErr?.response?.data,
-            message: profileErr?.message
+          console.warn('Failed to fetch profile:', profileErr);
+        }
+        
+        hasProcessedRef.current = true;
+        redirectAfterAuth(false);
+        return;
+      }
+      
+      const authState = useAuthStore.getState();
+      if (authState.isAuthenticated && authState.accessToken) {
+        const hasAssessment = authState.user?.has_assessment || false;
+        hasProcessedRef.current = true;
+        redirectAfterAuth(hasAssessment);
+        return;
+      }
+      
+      try {
+        const meResponse = await authAPI.me();
+        if (meResponse?.data?.success) {
+          login({
+            access_token: session.accessToken || 'oauth_token',
+            refresh_token: session.refreshToken || 'oauth_refresh',
+            user: meResponse.data.data,
+            profile: meResponse.data.data,
           });
-          // Fallback: redirect to skill-match even if me() fails
-          console.log('🔀 Fallback: Redirecting to skill-match');
-          window.location.href = '/skill-match';
+          const hasAssessment = meResponse.data.data?.has_assessment || false;
+          hasProcessedRef.current = true;
+          redirectAfterAuth(hasAssessment);
           return;
         }
-      } else {
-        console.log('⚠️ Tokens not in session, syncing with backend...');
-        // Tokens belum ada, perlu sync dengan backend
-        try {
-          // Try register first
-          const registerResponse = await authAPI.register({
-            name: session.user.name || session.user.email,
-            email: session.user.email,
-            password: `oauth_${session.user.id}_${Date.now()}`,
-          });
+      } catch (meErr) {
+        console.log('User might not exist, trying register...');
+      }
+      
+      try {
+        const registerResponse = await authAPI.register({
+          name: session.user.name || session.user.email,
+          email: session.user.email,
+          password: `oauth_${session.user.id}_${Date.now()}`,
+        });
 
-          if (registerResponse?.data?.success) {
-            console.log('✅ Backend registration successful, syncing to Zustand...');
-            login(registerResponse.data.data);
-            
-            // Redirect berdasarkan has_assessment
-            const hasAssessment = registerResponse.data.data?.has_assessment || false;
-            const redirectPath = hasAssessment ? '/personalized' : '/skill-match';
-            console.log('🔀 Redirecting to:', redirectPath);
-            window.location.href = redirectPath;
-            return;
-          } else {
-            // User might already exist - redirect to skill-match
-            console.log('⚠️ Registration failed, user might exist. Redirecting to skill-match...');
-            window.location.href = '/skill-match';
-            return;
-          }
-        } catch (registerErr) {
-          console.error('❌ Backend registration error:', registerErr);
+        if (registerResponse?.data?.success) {
+          login(registerResponse.data.data);
+          const hasAssessment = registerResponse.data.data?.has_assessment || false;
+          hasProcessedRef.current = true;
+          redirectAfterAuth(hasAssessment);
+          return;
+        }
+      } catch (registerErr) {
+        if (registerErr?.response?.status === 409) {
+          hasProcessedRef.current = true;
+          redirectAfterAuth(false);
+          return;
+        }
+        throw registerErr;
+      }
+      
+      hasProcessedRef.current = true;
+      redirectAfterAuth(false);
+    } catch (err) {
+      console.error('OAuth sync error:', err);
+      setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
+      resetLoadingState();
+    }
+  }, [isAuthenticated, login, redirectAfterAuth, resetLoadingState]);
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    const code = searchParams.get('code');
+    const callbackUrl = searchParams.get('callbackUrl');
+    
+    if (isAuthenticated || hasProcessedRef.current) {
+      return;
+    }
+    
+    if (errorParam && errorParam !== 'OAuthCallback') {
+      setError("Terjadi kesalahan saat login dengan Google. Silakan coba lagi.");
+      return;
+    }
+    
+    if (status === 'authenticated' && session) {
+      handleOAuthSuccess(session);
+    } else if (status === 'unauthenticated') {
+      if (callbackUrl || code || errorParam === 'OAuthCallback') {
+        if (isAuthenticated) {
+          const hasAssessment = useAuthStore.getState().user?.has_assessment || false;
+          redirectAfterAuth(hasAssessment);
+          return;
+        }
+        
+        if (!processingOAuthRef.current) {
+          processingOAuthRef.current = true;
           
-          // If user exists (409 Conflict), that's ok - redirect to skill-match
-          if (registerErr?.response?.status === 409) {
-            console.log('ℹ️ User already exists (409), redirecting to skill-match');
-            window.location.href = '/skill-match';
-            return;
-          }
+          let attempts = 0;
+          const maxAttempts = 5;
           
-          setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
-          setIsLoading(false);
+          const checkSession = async () => {
+            attempts++;
+            try {
+              if (isAuthenticated) {
+                processingOAuthRef.current = false;
+                return;
+              }
+              
+              const refreshedSession = await getSession();
+              
+              if (refreshedSession) {
+                await handleOAuthSuccess(refreshedSession);
+              } else if (attempts < maxAttempts) {
+                setTimeout(checkSession, 1000);
+              } else {
+                resetLoadingState();
+              }
+            } catch (err) {
+              console.error('Session refresh error:', err);
+              if (attempts < maxAttempts) {
+                setTimeout(checkSession, 1000);
+              } else {
+                resetLoadingState();
+              }
+            }
+          };
+          
+          setTimeout(checkSession, 500);
         }
       }
-    } catch (err) {
-      console.error('❌ OAuth sync error:', err);
-      setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
-      setIsLoading(false);
     }
-  };
+  }, [searchParams, status, session, isAuthenticated, handleOAuthSuccess, redirectAfterAuth, resetLoadingState]);
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -252,21 +234,16 @@ export default function LoginPage() {
     try {
       const response = await authAPI.login(formData.email, formData.password);
       if (response?.data?.success) {
-        // ✅ Simpan ke Zustand store (otomatis persist ke localStorage)
         login(response.data.data);
-
-        // Redirect ke personalized (kalau sudah punya akun, langsung ke personalized)
-        router.push("/personalized");
+        window.location.href = "/personalized";
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
     } catch (err) {
       console.error('Login error:', err);
-      // Extract error message with better handling
       let errorMessage = "Terjadi kesalahan saat login. Silakan coba lagi.";
       
       if (err?.response?.data) {
-        // Try multiple error message locations
         const errorData = err.response.data;
         errorMessage = errorData?.error?.message || 
                       errorData?.error || 
@@ -292,7 +269,6 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = () => {
-    // ✅ Use default NextAuth path (/api/auth)
     signIn("google", { 
       callbackUrl: "/personalized",
       redirect: true

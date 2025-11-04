@@ -30,6 +30,9 @@ export function useDashboardLogic() {
     nextSteps,
     formattedJobs,
     skillGaps,
+    refreshAIAnalysis,
+    refreshingAI,
+    aiStatus,
   } = usePersonalizedProfile();
 
   // Get user name from auth store
@@ -333,6 +336,11 @@ export function useDashboardLogic() {
     // Jobs & recommendations
     jobData,
     nextSteps,
+    
+    // AI Analysis refresh
+    refreshAIAnalysis,
+    refreshingAI,
+    aiStatus,
     
     // Utils
     chartColors,
