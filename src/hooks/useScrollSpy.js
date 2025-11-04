@@ -67,6 +67,5 @@ export function useScrollSpy(ids, offset = 120) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       io.disconnect();
     };
-  // gunakan idsJoin agar deps stabil; offset angka stabil
-  }, [idsJoin, offset]);
+  }, [ids, idsJoin, offset]);
 }

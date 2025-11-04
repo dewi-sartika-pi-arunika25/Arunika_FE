@@ -12,12 +12,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, LogIn,Eye, EyeOff, Home } from "lucide-react";
+import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
+import { signIn, useSession, getSession } from "next-auth/react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
 import { FcGoogle } from "react-icons/fc";
 import { useAuthStore } from "@/lib/store/auth";
-import { getOAuthRedirectUrl } from "@/lib/utils/oauth";
 
 const Separator = () => (
   <div className="relative my-4">
@@ -36,66 +36,205 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const login = useAuthStore((state) => state.login);
+  const { data: session, status } = useSession();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Handle OAuth callback from backend
+  // Handle OAuth callback and error
   useEffect(() => {
     const errorParam = searchParams.get('error');
-    const successParam = searchParams.get('success');
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    const userId = searchParams.get('user_id');
-    const hasAssessment = searchParams.get('has_assessment') === 'true';
-
-    if (errorParam) {
-      setError(decodeURIComponent(errorParam));
-      return;
+    const code = searchParams.get('code');
+    const callbackUrl = searchParams.get('callbackUrl');
+    
+    console.log('🔍 Login page loaded:', { errorParam, code, callbackUrl, status });
+    
+    // "OAuthCallback" is not an error, it's part of the OAuth flow
+    // Only show error for actual error codes
+    if (errorParam && errorParam !== 'OAuthCallback') {
+      console.error('❌ OAuth error from URL:', errorParam);
+      setError("Terjadi kesalahan saat login dengan Google. Silakan coba lagi.");
+    } else if (errorParam === 'OAuthCallback') {
+      console.log('ℹ️ OAuthCallback detected (not an error, just OAuth flow)');
     }
 
-    // Handle successful OAuth callback
-    if (successParam === 'true' && accessToken && refreshToken) {
-      handleOAuthCallback(accessToken, refreshToken, userId, hasAssessment);
-    }
-  }, [searchParams]);
-  
-  const handleOAuthCallback = async (accessToken, refreshToken, userId, hasAssessment) => {
-    try {
-      // Save tokens first to Zustand store
-      login({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        user: { id: userId },
-        profile: { user_id: userId },
-      });
-
-      // Try to get user profile from backend (optional, can redirect without it)
-      try {
-        const meResponse = await authAPI.me();
-        if (meResponse?.data?.success) {
-          // Update with full profile data
-          login({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            user: meResponse.data.data.auth_user,
-            profile: meResponse.data.data.profile,
-          });
-        }
-      } catch (profileErr) {
-        console.warn('Failed to fetch profile, using tokens only:', profileErr);
-        // Continue with tokens only
+    // Handle OAuth success - sync dengan backend dan login ke Zustand
+    const checkOAuthSession = async () => {
+      // Skip if already processing redirect
+      if (isLoading) {
+        console.log('⏸️ Already processing OAuth, skipping...');
+        return;
       }
+      
+      if (status === 'authenticated' && session) {
+        console.log('✅ NextAuth session authenticated:', { 
+          user: session.user, 
+          hasTokens: !!(session.accessToken && session.refreshToken),
+          email: session.user?.email,
+          callbackUrl
+        });
+        setIsLoading(true); // Prevent multiple calls
+        await handleOAuthSuccess(session);
+      } else if (status === 'loading') {
+        console.log('⏳ NextAuth status: loading...', { code, callbackUrl, errorParam });
+        // Wait for session to be ready - useEffect will re-run when status changes
+      } else if (status === 'unauthenticated') {
+        // If we have callbackUrl or error=OAuthCallback, we're coming from OAuth - session might still be loading
+        if (callbackUrl || code || errorParam === 'OAuthCallback') {
+          console.log('⏳ OAuth callback detected, checking cookies...', { code, callbackUrl, errorParam });
+          
+          // Check if NextAuth session cookie exists
+          if (typeof document !== 'undefined') {
+            const cookies = document.cookie.split(';').reduce((acc, cookie) => {
+              const [key, value] = cookie.trim().split('=');
+              acc[key] = value;
+              return acc;
+            }, {});
+            
+            console.log('📋 Available cookies:', Object.keys(cookies));
+            console.log('🍪 NextAuth session cookie:', cookies['next-auth.session-token'] ? 'Found' : 'Not found');
+            console.log('🍪 Secure NextAuth session cookie:', cookies['__Secure-next-auth.session-token'] ? 'Found' : 'Not found');
+          }
+          
+          // Force session refresh after OAuth callback
+          if (errorParam === 'OAuthCallback' || callbackUrl) {
+            console.log('🔄 Forcing session refresh...');
+            // Try multiple times to get session (cookie might not be set immediately)
+            let attempts = 0;
+            const maxAttempts = 5;
+            
+            const checkSession = async () => {
+              attempts++;
+              try {
+                const refreshedSession = await getSession();
+                console.log(`🔄 Session refresh attempt ${attempts}/${maxAttempts}:`, { 
+                  hasSession: !!refreshedSession,
+                  email: refreshedSession?.user?.email 
+                });
+                
+                if (refreshedSession) {
+                  console.log('✅ Session found! Processing OAuth success...');
+                  // Session is ready, trigger handleOAuthSuccess
+                  await handleOAuthSuccess(refreshedSession);
+                } else if (attempts < maxAttempts) {
+                  // Try again after delay
+                  setTimeout(checkSession, 1000);
+                } else {
+                  console.warn('⚠️ Session not found after multiple attempts');
+                }
+              } catch (err) {
+                console.error('❌ Session refresh error:', err);
+                if (attempts < maxAttempts) {
+                  setTimeout(checkSession, 1000);
+                }
+              }
+            };
+            
+            // Start checking after initial delay
+            setTimeout(checkSession, 500);
+          }
+        } else {
+          console.log('ℹ️ NextAuth status: unauthenticated (no OAuth callback)');
+        }
+      }
+    };
+    
+    checkOAuthSession();
+  }, [searchParams, status, session, isLoading]);
 
-      // Redirect based on assessment status
-      if (hasAssessment) {
-        router.push('/personalized');
+  const handleOAuthSuccess = async (session) => {
+    try {
+      console.log('🔄 Processing OAuth session...', { session });
+      
+      // Get tokens from NextAuth session
+      const { accessToken, refreshToken } = session;
+      
+      if (accessToken && refreshToken) {
+        console.log('✅ Tokens found in NextAuth session, syncing to Zustand...');
+        // Tokens sudah ada dari NextAuth, langsung simpan ke Zustand
+        login({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          user: session.user,
+          profile: session.user,
+        });
+        
+        // Wait a bit for Zustand state to update and cookies to be set
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Get assessment status and redirect
+        try {
+          const meResponse = await authAPI.me();
+          console.log('✅ me() response:', meResponse?.data);
+          if (meResponse?.data?.success) {
+            const hasAssessment = meResponse.data.data?.has_assessment || false;
+            const redirectPath = hasAssessment ? '/personalized' : '/skill-match';
+            console.log('🔀 Redirecting to:', redirectPath, 'hasAssessment:', hasAssessment);
+            // Use window.location for full page redirect to avoid redirect loop
+            window.location.href = redirectPath;
+            return;
+          } else {
+            console.log('⚠️ me() response not successful, redirecting to skill-match');
+            window.location.href = '/skill-match';
+            return;
+          }
+        } catch (profileErr) {
+          console.warn('⚠️ Failed to fetch profile:', profileErr);
+          console.warn('⚠️ Error details:', {
+            status: profileErr?.response?.status,
+            data: profileErr?.response?.data,
+            message: profileErr?.message
+          });
+          // Fallback: redirect to skill-match even if me() fails
+          console.log('🔀 Fallback: Redirecting to skill-match');
+          window.location.href = '/skill-match';
+          return;
+        }
       } else {
-        router.push('/skill-match');
+        console.log('⚠️ Tokens not in session, syncing with backend...');
+        // Tokens belum ada, perlu sync dengan backend
+        try {
+          // Try register first
+          const registerResponse = await authAPI.register({
+            name: session.user.name || session.user.email,
+            email: session.user.email,
+            password: `oauth_${session.user.id}_${Date.now()}`,
+          });
+
+          if (registerResponse?.data?.success) {
+            console.log('✅ Backend registration successful, syncing to Zustand...');
+            login(registerResponse.data.data);
+            
+            // Redirect berdasarkan has_assessment
+            const hasAssessment = registerResponse.data.data?.has_assessment || false;
+            const redirectPath = hasAssessment ? '/personalized' : '/skill-match';
+            console.log('🔀 Redirecting to:', redirectPath);
+            window.location.href = redirectPath;
+            return;
+          } else {
+            // User might already exist - redirect to skill-match
+            console.log('⚠️ Registration failed, user might exist. Redirecting to skill-match...');
+            window.location.href = '/skill-match';
+            return;
+          }
+        } catch (registerErr) {
+          console.error('❌ Backend registration error:', registerErr);
+          
+          // If user exists (409 Conflict), that's ok - redirect to skill-match
+          if (registerErr?.response?.status === 409) {
+            console.log('ℹ️ User already exists (409), redirecting to skill-match');
+            window.location.href = '/skill-match';
+            return;
+          }
+          
+          setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
+          setIsLoading(false);
+        }
       }
     } catch (err) {
-      console.error('OAuth callback error:', err);
-      setError("Gagal memuat profil. Silakan coba lagi.");
+      console.error('❌ OAuth sync error:', err);
+      setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
+      setIsLoading(false);
     }
   };
 
@@ -104,8 +243,6 @@ export default function LoginPage() {
     setFormData((prev) => ({ ...prev, [id]: value }));
     setError("");
   };
-  
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -115,15 +252,11 @@ export default function LoginPage() {
     try {
       const response = await authAPI.login(formData.email, formData.password);
       if (response?.data?.success) {
+        // ✅ Simpan ke Zustand store (otomatis persist ke localStorage)
         login(response.data.data);
 
-        // Redirect berdasarkan apakah user sudah punya assessment data
-        const hasAssessment = response.data.data?.has_assessment || false;
-        if (hasAssessment) {
-          router.push("/personalized");
-        } else {
-          router.push("/skill-match");
-        }
+        // Redirect ke personalized (kalau sudah punya akun, langsung ke personalized)
+        router.push("/personalized");
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
@@ -159,7 +292,11 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = () => {
-    window.location.href = getOAuthRedirectUrl('login');
+    // ✅ Use default NextAuth path (/api/auth)
+    signIn("google", { 
+      callbackUrl: "/personalized",
+      redirect: true
+    });
   };
 
   return (
@@ -230,31 +367,17 @@ export default function LoginPage() {
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-  
                 <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Masukkan kata sandi Anda"
-                value={formData.password}
-                onChange={handleChange}
-                required
-               className="pl-10 pr-10"
-               disabled={isLoading}
-               />
-
-               <button
-               type="button"
-               onClick={() => setShowPassword((prev) => !prev)}
-                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                   {showPassword ? (
-                 <EyeOff className="h-4 w-4" />
-                 ) : (
-                <Eye className="h-4 w-4" />
-                )}
-             </button>
-            </div>
-
+                  id="password"
+                  type="password"
+                  placeholder="Masukkan kata sandi Anda"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className="pl-10"
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
             <Button type="submit" className="w-full mt-2" disabled={isLoading}>
@@ -278,4 +401,4 @@ export default function LoginPage() {
       </Card>
     </div>
   );
-};
+}

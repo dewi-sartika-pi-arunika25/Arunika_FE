@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/store/auth";
 
 /**
@@ -33,11 +34,25 @@ export function withAuth(Component, options = {}) {
 
   return function ProtectedComponent(props) {
     const router = useRouter();
-    const { isAuthenticated, isLoggedIn, user, profile } = useAuthStore();
+    const { data: session, status } = useSession(); // NextAuth session
+    const { isAuthenticated, isLoggedIn, user, profile } = useAuthStore(); // Zustand store
+
+    // Check authentication: NextAuth session OR Zustand store
+    const isAuthByNextAuth = status === 'authenticated' && !!session?.user;
+    const isAuthByZustand = isAuthenticated && isLoggedIn();
+    const isAuthenticatedUser = isAuthByNextAuth || isAuthByZustand;
+    const isLoading = status === 'loading';
+
+    // Get user data from NextAuth or Zustand
+    const currentUser = session?.user || user;
+    const currentProfile = profile || session?.user;
 
     useEffect(() => {
+      // Only check auth after session is loaded
+      if (isLoading) return;
+
       // Check authentication
-      if (!isAuthenticated || !isLoggedIn()) {
+      if (!isAuthenticatedUser) {
         const currentPath = window.location.pathname + window.location.search;
         router.push(`${redirectTo}?returnUrl=${encodeURIComponent(currentPath)}`);
         return;
@@ -45,16 +60,16 @@ export function withAuth(Component, options = {}) {
 
       // Check role if required
       if (requireRole) {
-        const userRole = profile?.role || user?.role;
+        const userRole = currentProfile?.role || currentUser?.role;
         if (userRole !== requireRole) {
           router.push("/unauthorized");
           return;
         }
       }
-    }, [isAuthenticated, isLoggedIn, router, user, profile]);
+    }, [isLoading, isAuthenticatedUser, router, redirectTo, requireRole, currentProfile, currentUser]);
 
     // Show fallback while checking
-    if (!isAuthenticated || !isLoggedIn()) {
+    if (isLoading || !isAuthenticatedUser) {
       return fallback || (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
@@ -67,7 +82,7 @@ export function withAuth(Component, options = {}) {
 
     // Check role authorization
     if (requireRole) {
-      const userRole = profile?.role || user?.role;
+      const userRole = currentProfile?.role || currentUser?.role;
       if (userRole !== requireRole) {
         return (
           <div className="flex items-center justify-center min-h-screen">

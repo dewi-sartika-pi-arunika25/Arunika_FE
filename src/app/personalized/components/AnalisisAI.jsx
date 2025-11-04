@@ -98,38 +98,51 @@ export default function AnalisisAI() {
         </Card>
       )}
 
-      {/* === MANUAL REFRESH / TRIGGER AI === */}
-      {(!hasAIInsight || aiStatus === 'failed') && (
-        <div className="flex items-center gap-2">
-          <Button
-            disabled={refreshingAI || aiStatus === 'pending'}
-            onClick={refreshAIAnalysis}
-            className="bg-[#FF8C00] hover:bg-[#E67600] text-white"
-          >
-            {refreshingAI ? 'Memulai ulang…' : 'Regenerasi Analisis AI'}
-          </Button>
-          {aiStatus && (
-            <span className="text-xs text-gray-500">Status: {aiStatus}</span>
-          )}
-        </div>
-      )}
-
       {/* === AI ANALYSIS (from backend or static fallback) === */}
-      {hasAIInsight && (
-        <Card className="bg-[#FFFDF5] border border-[#E4B200]/30 shadow-md">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center gap-2">
+      <Card className="bg-[#FFFDF5] border border-[#E4B200]/30 shadow-md">
+        <CardHeader>
+          <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-[#FF8C00]" />
               Analisis AI
-              {isStaticFallback && (
-                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full ml-2">
-                  Contoh Data
-                </span>
+            </div>
+            <Button
+              onClick={async () => {
+                console.log('🔘 Generate/Regenerasi AI Analysis clicked');
+                console.log('📊 Current state:', { 
+                  hasAIInsight, 
+                  isStaticFallback, 
+                  aiStatus, 
+                  refreshingAI,
+                  profile: profile ? 'exists' : 'null'
+                });
+                try {
+                  await refreshAIAnalysis('detailed');
+                } catch (err) {
+                  console.error('❌ Error generating AI analysis:', err);
+                  alert('Gagal generate analisis AI. Silakan coba lagi atau hubungi support.');
+                }
+              }}
+              disabled={refreshingAI || aiStatus === 'pending'}
+              size="sm"
+              className="bg-[#FF8C00] hover:bg-[#E67600] text-white transition-all duration-300 hover:shadow-lg hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {refreshingAI ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin mr-2" />
+                  Memproses...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {isStaticFallback || !hasAIInsight ? 'Generate Analisis AI' : 'Regenerasi Analisis'}
+                </>
               )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-[#2C2C2C]">
-            {typeof profile.ai_insight === 'object' ? (
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-[#2C2C2C]">
+          {hasAIInsight && typeof profile.ai_insight === 'object' ? (
               <div className="space-y-4">
                 {profile.ai_insight.personality_summary && (
                   <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
@@ -222,13 +235,18 @@ export default function AnalisisAI() {
                     )}
                   </div>
                 )}
-              </div>
-            ) : (
-              <p className="text-gray-700">{String(profile.ai_insight)}</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </div>
+          ) : hasAIInsight && profile.ai_insight ? (
+            <p className="text-gray-700">{String(profile.ai_insight)}</p>
+          ) : (
+            <div className="text-center py-8">
+              <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-gray-600 mb-2">Belum ada analisis AI</p>
+              <p className="text-sm text-gray-500">Klik tombol "Generate Analisis AI" di kanan atas untuk memulai</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* === STRENGTHEN (KEKUATAN UTAMA) === */}
       {strengths.topThree && strengths.topThree.length > 0 && (() => {
