@@ -2,6 +2,8 @@
 import { useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import AnalisisAI from "./components/AnalisisAI";
+import ArunaQuest from "./components/ArunaQuest";
+import MirrorChatPage from "./mirror-chat/page";
 import RekomendasiPekerjaan from "./components/RekomendasiPekerjaan";
 import RekomendasiSkillUp from "./components/RekomendasiSkillUp";
 import DashboardContent from "./components/DashboardContent";
@@ -65,6 +67,10 @@ export default function PersonalizedPage() {
         return <RekomendasiPekerjaan />;
       case "rekom-skill":
         return <RekomendasiSkillUp />;
+      case "aruna-quest":
+        return <ArunaQuest />;
+      case "mirror-chat":
+        return <MirrorChatPage />;
       default:
         return <DashboardContent />;
     }

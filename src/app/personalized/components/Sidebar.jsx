@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Home, Brain, Target, BarChart3, Pencil, User } from "lucide-react";
+import { Home, Brain, Target, BarChart3, Pencil, User, Gamepad, Book} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
@@ -20,6 +20,8 @@ export default function Sidebar({ activeMenu, setActiveMenu, userProfile = {}, o
     { key: "analisis", icon: Brain, label: "Analisis AI" },
     { key: "rekom-pekerjaan", icon: Target, label: "Rekomendasi Pekerjaan" },
     { key: "rekom-skill", icon: BarChart3, label: "Skill Up" },
+    { key: "aruna-quest", icon: Gamepad, label: "Aruna Quest" },
+    { key: "mirror-chat", icon: Book, label: "Mirror Chat" },
   ];
 
   return (
