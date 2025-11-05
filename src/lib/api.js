@@ -168,20 +168,26 @@ api.interceptors.response.use(
     }
 
     // Log all errors in development (with safety checks)
-    if (process.env.NODE_ENV === 'development') {
+    // Skip logging for 404 errors (expected for missing resources)
+    const statusCode = error?.response?.status || error?.status;
+    const shouldLog = process.env.NODE_ENV === 'development' && statusCode !== 404;
+    
+    if (shouldLog) {
       try {
         const errorInfo = {
           url: originalRequest?.url || error?.config?.url || 'Unknown',
           method: originalRequest?.method || error?.config?.method || 'Unknown',
-          status: error?.response?.status || error?.status || null,
+          status: statusCode || null,
           message: error?.message || 'Unknown error',
           data: error?.response?.data || error?.data || null,
           code: error?.code || null,
         };
-        console.error('❌ API Error:', errorInfo);
+        // Only log if errorInfo has meaningful data
+        if (errorInfo.url !== 'Unknown' || errorInfo.status || errorInfo.message !== 'Unknown error') {
+          console.error('❌ API Error:', errorInfo);
+        }
       } catch (logError) {
-        // Fallback if logging itself fails
-        console.error('❌ API Error (failed to format):', error);
+        // Silently fail - don't log if logging itself fails
       }
     }
 
