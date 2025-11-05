@@ -193,7 +193,6 @@
   .reveal-hide { opacity: 0; transform: translateY(12px) scale(.98); }
   .reveal-in { opacity: 1; transform: translateY(0) scale(1); transition: opacity .6s ease var(--reveal-delay, 0ms), transform .6s ease var(--reveal-delay, 0ms); }
   
-  /* Set reveal delays via CSS nth-child to avoid hydration mismatch */
   .reveal:nth-child(1) { --reveal-delay: 0ms; }
   .reveal:nth-child(2) { --reveal-delay: 60ms; }
   .reveal:nth-child(3) { --reveal-delay: 120ms; }
@@ -214,17 +213,15 @@
   }
   @keyframes cta-ripple { to { transform: scale(2.5); opacity: 0; } }
 
-  /* ===== WIDTH HELPER — samakan semua section besar ===== */
   .wrap{
     max-width: 1100px;
     margin-inline: auto;
-    padding-inline: 1.5rem;    /* = px-6 */
+    padding-inline: 1.5rem;
   }
   @media (min-width:640px){
-    .wrap{ padding-inline: 2.5rem; }  /* = sm:px-10 */
+    .wrap{ padding-inline: 2.5rem; }
   }
 
-  /* === TEAM FLIP CARD (About Us) === */
   .team-tilt{ perspective: 1200px; }
   .team-flip{
     position: relative; width: 100%; height: 320px; border-radius: 1.25rem;
@@ -291,3 +288,57 @@
 @media (prefers-reduced-motion: reduce) {
   .hero-caret { animation: none; }
 }
+
+/* === MirrorChat layout (scoped) === */
+.mc-shell {
+  position: relative;
+  min-height: calc(100svh - var(--nav-h, 72px));
+  padding: clamp(16px, 3.6vw, 36px);
+  background:
+    radial-gradient(90% 60% at 50% 0%,
+      color-mix(in oklab, var(--accent-3) 38%, transparent),
+      transparent 70%),
+    linear-gradient(180deg, #ffffff 0%, #fff6e8 100%);
+  overflow: hidden;
+}
+.mc-card {
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+  border-radius: 1.25rem;
+  background: #fff;
+  border: 1px solid color-mix(in oklab, var(--accent-3) 65%, var(--border));
+  box-shadow:
+    0 18px 60px rgba(0,0,0,.06),
+    inset 0 0 0 1px color-mix(in oklab, var(--accent-3) 35%, transparent);
+  overflow: hidden;
+}
+.mc-viewport {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: clamp(560px, 76svh, 820px);
+}
+.mc-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: linear-gradient(180deg, #ffffff 75%, rgba(255,255,255,0));
+  padding: 18px clamp(16px, 2.4vw, 24px);
+  border-bottom: 1px solid color-mix(in oklab, var(--accent-3) 55%, var(--border));
+  backdrop-filter: blur(2px);
+}
+.mc-scroll {
+  overflow-y: auto;
+  padding: 12px clamp(16px, 2.4vw, 24px) 0;
+}
+.mc-inputbar {
+  padding: 14px clamp(16px, 2.4vw, 24px) 16px;
+  border-top: 1px solid color-mix(in oklab, var(--accent-3) 55%, var(--border));
+  background: #fff;
+}
+.mc-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
+.mc-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--accent-3) 60%, var(--border));
+  border-radius: 9999px;
+}
+.mc-scroll::-webkit-scrollbar-track { background: transparent; }
