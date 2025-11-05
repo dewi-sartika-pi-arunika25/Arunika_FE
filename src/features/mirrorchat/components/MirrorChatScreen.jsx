@@ -4,7 +4,7 @@ import { Bot } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useMirrorChatStore } from "../store/chat.store";
 import { MirrorChatAPI } from "../lib/ApiAdapter";
-import { trackConfusion, mentorRecommendation, resetConfusion } from "../lib/guards";
+import { trackConfusion, mentorRecommendation, resetConfusion, aiReflectionGuard } from "../lib/guards";
 import MessageBubble from "./MessageBubble";
 import ChatHeader from "./ChatHeader";
 import ChatInput from "./ChatInput";
@@ -15,8 +15,10 @@ export default function MirrorChatScreen() {
   const displayName = session?.user?.name || session?.user?.email || "Tamu";
 
   const messages = useMirrorChatStore((s) => s.messages);
+  const hasWelcomed = useMirrorChatStore((s) => s.hasWelcomed);
   const addMessage = useMirrorChatStore((s) => s.addMessage);
   const clearMessages = useMirrorChatStore((s) => s.clearMessages);
+  const setHasWelcomed = useMirrorChatStore((s) => s.setHasWelcomed);
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -38,11 +40,22 @@ export default function MirrorChatScreen() {
 
     try {
       const count = trackConfusion(userId, value);
-      const reply = await MirrorChatAPI.askBot({
+      
+      // Cek apakah ini first message (belum ada welcome message)
+      const isFirstMessage = !hasWelcomed && messages.length === 0;
+      
+      // Gunakan AI Reflection Guard untuk personalisasi berdasarkan role fit analysis
+      const reply = await aiReflectionGuard(
         userId,
-        profile: session?.user || {},
-        message: value,
-      });
+        value,
+        session?.user || {},
+        isFirstMessage
+      );
+
+      // Mark sebagai sudah di-welcome setelah first message
+      if (isFirstMessage) {
+        setHasWelcomed(true);
+      }
 
       if (count < 5) {
         addMessage({ role: "bot", content: reply });
