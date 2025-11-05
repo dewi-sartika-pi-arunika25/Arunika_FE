@@ -1,27 +1,26 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useMirrorChatStore } from "../store/chat.store";
 import { MirrorChatAPI } from "../lib/ApiAdapter";
 import { trackConfusion, mentorRecommendation, resetConfusion } from "../lib/guards";
 import MessageBubble from "./MessageBubble";
-import ChatInput from "./ChatInput";
 import ChatHeader from "./ChatHeader";
-import RightSidebar from "./RightSidebar";
-import SearchModal from "./SearchModal";
-import { useSession } from "next-auth/react";
+import ChatInput from "./ChatInput";
 
 export default function MirrorChatScreen() {
   const { data: session } = useSession();
   const userId = session?.user?.id || session?.user?.email || "anon";
+  const displayName = session?.user?.name || session?.user?.email || "Tamu";
+
   const messages = useMirrorChatStore((s) => s.messages);
   const addMessage = useMirrorChatStore((s) => s.addMessage);
   const clearMessages = useMirrorChatStore((s) => s.clearMessages);
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [activeMenu, setActiveMenu] = useState(null);
-  const [showSearch, setShowSearch] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -32,6 +31,7 @@ export default function MirrorChatScreen() {
     e.preventDefault();
     const value = input.trim();
     if (!value) return;
+
     addMessage({ role: "user", content: value });
     setInput("");
     setIsLoading(true);
@@ -47,7 +47,10 @@ export default function MirrorChatScreen() {
       if (count < 5) {
         addMessage({ role: "bot", content: reply });
       } else {
-        addMessage({ role: "bot", content: `${reply}\n\n🤝 Sepertinya kamu butuh panduan lebih lanjut. Coba konsultasi mentor.` });
+        addMessage({
+          role: "bot",
+          content: `${reply}\n\n🤝 Sepertinya kamu butuh panduan lebih lanjut. Coba konsultasi mentor.`,
+        });
         const mentorMsg = await mentorRecommendation(userId);
         addMessage({ role: "bot", content: mentorMsg });
         resetConfusion(userId);
@@ -59,53 +62,86 @@ export default function MirrorChatScreen() {
     }
   };
 
-  const onLogout = () => {
-    window.location.href = "/logout";
-  };
-
-  const onClear = () => {
-    if (window.confirm("Yakin hapus semua pesan?")) clearMessages();
+  const openConfirm = () => setShowConfirm(true);
+  const closeConfirm = () => setShowConfirm(false);
+  const confirmClear = () => {
+    clearMessages();
+    setShowConfirm(false);
   };
 
   return (
-    <div className="flex min-h-screen bg-[#0B0B0F] text-white flex-col lg:flex-row">
-      <div className="flex flex-col flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 pt-6 md:pt-10 pb-28 lg:pb-0">
-        <ChatHeader userId={userId} onLogout={onLogout} onClear={onClear} />
+    <div className="mc-shell">
+      <div className="mc-card">
+        <div className="mc-viewport">
+          <div className="mc-header">
+            <ChatHeader name={displayName} />
+          </div>
 
-        <div className="flex-grow overflow-y-auto space-y-6 pr-2">
-          {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-20">
-              <Bot size={32} className="mx-auto mb-3 text-[var(--mc-primary)]" />
-              <p className="text-base sm:text-lg font-semibold">Belum ada pesan</p>
-              <p className="text-xs sm:text-sm">Mulailah percakapan dengan bot di bawah.</p>
-            </div>
-          )}
-          {messages.map((m, i) => <MessageBubble key={i} message={m} />)}
-          {isLoading && (
-            <div className="flex items-start gap-3 mr-auto">
-              <div className="p-2 rounded-full bg-gray-800"><Bot size={18} /></div>
-              <div className="p-4 rounded-3xl bg-gray-900 border text-sm"
-                   style={{ borderColor: "var(--mc-border)" }}>
-                <span className="animate-pulse">Mengetik...</span>
+          <div className="mc-scroll space-y-6 pr-2">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-500 mt-16">
+                <Bot size={28} className="mx-auto mb-3" style={{ color: "var(--primary)" }} />
+                <p className="text-base font-semibold">Belum ada percakapan</p>
+                <p className="text-sm">Mulai ngobrol dengan AI Twin kamu di bawah.</p>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+            )}
+            {messages.map((m, i) => (
+              <MessageBubble key={i} message={m} />
+            ))}
+            {isLoading && (
+              <div className="flex items-start gap-3 mr-auto">
+                <div className="p-2 rounded-full bg-[#EFE9DC] text-[#4b3b2a]">
+                  <Bot size={18} />
+                </div>
+                <div className="p-4 rounded-2xl bg-white border text-sm shadow-sm"
+                     style={{ borderColor: "color-mix(in oklab, var(--accent-3) 55%, var(--border))" }}>
+                  <span className="animate-pulse">Mengetik...</span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
 
-        <ChatInput value={input} onChange={setInput} onSubmit={handleSend} disabled={isLoading} />
+          <div className="mc-inputbar">
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSubmit={handleSend}
+              disabled={isLoading}
+              onClearClick={openConfirm}
+            />
+          </div>
+        </div>
       </div>
 
-      <RightSidebar
-        activeMenu={activeMenu}
-        setActiveMenu={setActiveMenu}
-        user={{ userId }}
-        messages={messages}
-        logout={onLogout}
-        onOpenSearch={() => setShowSearch(true)}
-      />
-
-      {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
+      {showConfirm && (
+        <div className="fixed inset-0 z-[60] grid place-items-center px-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeConfirm} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-5 border shadow-xl"
+               style={{ borderColor: "color-mix(in oklab, var(--accent-3) 60%, var(--border))" }}>
+            <h3 className="text-lg font-semibold mb-1" style={{ color: "var(--text)" }}>Hapus seluruh chat?</h3>
+            <p className="text-sm mb-4" style={{ color: "color-mix(in oklab, var(--text) 78%, transparent)" }}>
+              Tindakan ini tidak bisa dibatalkan.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={closeConfirm}
+                className="rounded-full px-4 py-2 text-sm border"
+                style={{ borderColor: "var(--border)", color: "var(--text)", background: "#fff" }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmClear}
+                className="rounded-full px-4 py-2 text-sm text-white"
+                style={{ background: "var(--primary)" }}
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
