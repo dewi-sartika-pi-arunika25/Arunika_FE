@@ -1,9 +1,8 @@
 "use client";
-
 import { motion } from "framer-motion";
-import { useRef } from "react";
+import { useRef, memo } from "react";
 
-export default function CTAButton({ label, href = "#", onClick, variant }) {
+function CTAButton({ label, href = "#", onClick, variant }) {
   const btnRef = useRef(null);
   const isSecondary = variant === "secondary";
 
@@ -41,10 +40,8 @@ export default function CTAButton({ label, href = "#", onClick, variant }) {
               background: "color-mix(in oklab, var(--background) 86%, var(--accent-3))",
             }
           : {
-              background:
-                "linear-gradient(90deg, color-mix(in oklab, var(--primary) 82%, black) 0%, color-mix(in oklab, var(--primary) 96%, white) 100%)",
-              boxShadow:
-                "0 14px 30px -12px color-mix(in oklab, var(--primary) 62%, black)",
+              background: "#ff8300",
+              boxShadow: "0 14px 30px -12px rgba(255,131,0,.55)",
             }
       }
     >
@@ -60,3 +57,5 @@ export default function CTAButton({ label, href = "#", onClick, variant }) {
     </motion.a>
   );
 }
+
+export default memo(CTAButton);

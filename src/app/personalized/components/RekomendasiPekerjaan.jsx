@@ -1,20 +1,19 @@
 "use client";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
-import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
+import { useRekomendasiPekerjaan, getPlatformUrl, PLATFORMS } from "@/hooks/useRekomendasiPekerjaan";
 import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import { Briefcase, ExternalLink, Loader, AlertCircle } from "lucide-react";
 import Image from "next/image";
 
 export default function RekomendasiPekerjaan() {
-  const { formattedJobs, loading, error } = usePersonalizedProfile();
-
-  const platforms = [
-    { name: "LinkedIn", url: "https://linkedin.com/jobs", icon: "/linkedin.svg" },
-    { name: "JobStreet", url: "https://www.jobstreet.co.id", icon: "/jobstreet.png" },
-    { name: "Tech-in-Asia", url: "https://techinasia.com", icon: "/techinasia.png" },
-    { name: "Sribulancer", url: "https://www.sribulancer.com", icon: "/sribulancer.jpeg" },
-  ];
+  const {
+    formattedJobs,
+    loading,
+    error,
+    roleQuery,
+    topMatch,
+  } = useRekomendasiPekerjaan();
 
   if (loading) {
     return (
@@ -55,7 +54,6 @@ export default function RekomendasiPekerjaan() {
     );
   }
 
-  const topMatch = Math.max(...formattedJobs.map(j => j.match));
 
   return (
     <motion.div
@@ -139,24 +137,28 @@ export default function RekomendasiPekerjaan() {
 
                 {/* === Platform Links === */}
                 <div className="flex gap-2 mt-4 pt-3 border-t border-[#E4B200]/20">
-                  {platforms.map((p) => (
-                    <a
-                      key={p.name}
-                      href={p.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center w-8 h-8 rounded-full bg-[#FFFDF5] border border-[#E4B200]/40 hover:bg-[#E4B200]/20 transition-all hover:scale-110"
-                      title={`Cari di ${p.name}`}
-                    >
-                      <Image
-                        src={p.icon}
-                        alt={p.name}
-                        width={20}
-                        height={20}
-                        className="object-contain"
-                      />
-                    </a>
-                  ))}
+                  {PLATFORMS.map((p) => {
+                    const jobRole = roleQuery || job.role || "developer";
+                    const platformUrl = getPlatformUrl(p.name, jobRole);
+                    return (
+                      <a
+                        key={p.name}
+                        href={platformUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-8 h-8 rounded-full bg-[#FFFDF5] border border-[#E4B200]/40 hover:bg-[#E4B200]/20 transition-all hover:scale-110"
+                        title={`Cari "${jobRole}" di ${p.name}`}
+                      >
+                        <Image
+                          src={p.icon}
+                          alt={p.name}
+                          width={20}
+                          height={20}
+                          className="object-contain"
+                        />
+                      </a>
+                    );
+                  })}
                   {job.link && (
                     <a
                       href={job.link}

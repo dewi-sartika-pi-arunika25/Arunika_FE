@@ -1,20 +1,21 @@
 // hooks/useSkillMatch.js
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { skillQuestionsAPI, personalizedAPI, recPekerjaanAPI, pekerjaanAPI } from '@/lib/api';
+import { assessmentAPI, personalizedAPI, recPekerjaanAPI, pekerjaanAPI, skillQuestionsAPI } from '@/lib/api';
 import {
   computeScore,
   computeFit,
   topStrengths,
   mapSkillGaps,
   buildPersonalizedRecord,
-  getRoleCode
 } from '@/lib/skill/score';
 
 /**
  * Main hook untuk SkillMatch flow
+ * Flow: Load questions → User jawab → Submit → Scoring → Save personalized → Create job recommendations → Redirect
  */
 export function useSkillMatch(roleCategory) {
+  console.log('useSkillMatch hook called with roleCategory:', roleCategory);
   const router = useRouter();
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -26,31 +27,48 @@ export function useSkillMatch(roleCategory) {
     ? localStorage.getItem('user_id') 
     : null;
 
-  // Load questions by role category
+  // Load questions dari backend (balanced DISC + RIASEC)
   useEffect(() => {
+    console.log('useSkillMatch useEffect triggered with roleCategory:', roleCategory);
     const loadQuestions = async () => {
       try {
-        if (!roleCategory) {
-          setError('Role category tidak ditemukan');
-          setLoading(false);
-          return;
+        console.log('Loading questions from backend (balanced DISC + RIASEC)');
+        let res;
+        try {
+          res = await assessmentAPI.generateQuestions();
+        } catch (e) {
+          // Fallback to deprecated questions endpoint if assessment route not found
+          try {
+            res = await skillQuestionsAPI.getAll(1, 12);
+          } catch (_) {
+            throw e;
+          }
         }
+        console.log('API Response:', res);
+        console.log('API Response data:', res.data);
 
-        console.log('Loading questions for role:', roleCategory);
-        const res = await skillQuestionsAPI.getByRole(roleCategory);
-        
-        console.log('API Response:', res.data);
-        
         if (res.data.success) {
-          // Handle different response structures from API
-          const questionsData = res.data.questions || res.data.data?.questions || [];
-          console.log('Parsed questions:', questionsData);
-          
-          if (Array.isArray(questionsData) && questionsData.length > 0) {
-            setQuestions(questionsData);
+          // Support berbagai struktur response dari backend
+          const raw = res.data.data?.questions || res.data.data?.items || res.data.questions || res.data?.data || [];
+          const normalized = (Array.isArray(raw) ? raw : []).map((q, idx) => {
+            const backendId = q.id ?? q._id ?? q.question_id ?? idx;
+            return {
+              // Local unique id for UI state tracking to avoid collisions
+              id: `${backendId}_${idx}`,
+              // Original id expected by backend for scoring
+              qid: backendId,
+              text: q.text ?? q.question_text ?? q.question ?? q.content ?? '',
+              trait: q.trait ?? q.category ?? q.trait_type ?? q.dimension ?? 'General',
+              dimension: q.dimension ?? null,
+            };
+          });
+
+          console.log('Parsed questions (normalized):', normalized);
+          if (normalized.length > 0) {
+            setQuestions(normalized);
             setError('');
           } else {
-            setError('Tidak ada pertanyaan ditemukan untuk role: ' + roleCategory);
+            setError('Tidak ada pertanyaan ditemukan dari backend');
             setQuestions([]);
           }
         } else {
@@ -77,14 +95,14 @@ export function useSkillMatch(roleCategory) {
     }));
   };
 
-  // Submit quiz
+  // Submit quiz & create personalized profile
   const handleSubmit = async (e) => {
     e?.preventDefault();
     setSubmitting(true);
     setError('');
 
     try {
-      // Validate all questions answered
+      // 1. Validate semua pertanyaan jawab
       const allAnswered = questions.length > 0 && 
         questions.every(q => answers[q.id]);
 
@@ -100,7 +118,8 @@ export function useSkillMatch(roleCategory) {
         return;
       }
 
-      // Calculate scores
+      // 2. Calculate scores menggunakan scoring library
+      console.log('📊 Calculating scores...');
       const scoreData = computeScore(questions, answers);
       console.log('Score data:', scoreData);
 
@@ -114,7 +133,7 @@ export function useSkillMatch(roleCategory) {
       const strengthsList = topStrengths(scoreData.traitAvg);
       console.log('Strengths:', strengthsList);
 
-      // Build personalized record
+      // 3. Build personalized record
       const personalizedRecord = buildPersonalizedRecord(
         scoreData,
         fitScore,
@@ -122,53 +141,76 @@ export function useSkillMatch(roleCategory) {
       );
       console.log('Personalized record:', personalizedRecord);
 
-      // Create personalized record in database
-      const personalizedRes = await personalizedAPI.create(personalizedRecord);
-      console.log('Personalized response:', personalizedRes.data);
-
-      if (!personalizedRes.data.success) {
-        throw new Error('Gagal menyimpan hasil quiz: ' + (personalizedRes.data.error || 'Unknown error'));
+      // 4. Trigger backend assessment submit (to start AI background processing)
+      try {
+        const payload = {
+          // Send original ids to backend so mapping works
+          questions: questions.map(q => ({ id: q.qid, text: q.text, trait: q.trait, dimension: q.dimension })),
+          answers: questions.map(q => ({ question_id: q.qid, score_value: answers[q.id] }))
+        };
+        await assessmentAPI.submitAssessment(payload);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('assessment_submitted', 'true');
+        }
+      } catch (submitErr) {
+        console.warn('Assessment submit failed (AI may not run):', submitErr?.message);
       }
 
-      // Extract rec_id dengan safe handling berbagai response structure
+      // 5. Save ke database (personalized)
+      console.log('💾 Saving personalized profile...');
       let recId = null;
-      
-      if (personalizedRes.data.data?.personalized?.rec_id) {
-        recId = personalizedRes.data.data.personalized.rec_id;
-      } else if (personalizedRes.data.data?.rec_id) {
-        recId = personalizedRes.data.data.rec_id;
-      } else if (personalizedRes.data.personalized?.rec_id) {
-        recId = personalizedRes.data.personalized.rec_id;
+      try {
+        const personalizedRes = await personalizedAPI.create(personalizedRecord);
+        console.log('Personalized response:', personalizedRes.data);
+
+        if (!personalizedRes.data.success) {
+          throw new Error('Gagal menyimpan hasil quiz: ' + (personalizedRes.data.error || 'Unknown error'));
+        }
+
+        // Extract rec_id dari berbagai kemungkinan struktur response
+        if (personalizedRes.data.data?.personalized?.rec_id) {
+          recId = personalizedRes.data.data.personalized.rec_id;
+        } else if (personalizedRes.data.data?.rec_id) {
+          recId = personalizedRes.data.data.rec_id;
+        } else if (personalizedRes.data.personalized?.rec_id) {
+          recId = personalizedRes.data.personalized.rec_id;
+        }
+      } catch (createErr) {
+        console.warn('⚠️ Personalized create failed, using local fallback:', createErr?.message);
+        // Fallback ke local rec_id jika API gagal (404, 401, 500, dll)
+        recId = `local-${Date.now()}`;
       }
 
-      console.log('RecId created:', recId);
+      console.log('✅ RecId resolved:', recId);
 
-      if (!recId) {
-        throw new Error('rec_id tidak ditemukan di response: ' + JSON.stringify(personalizedRes.data));
-      }
-
-      // Store result di sessionStorage untuk reference
-      if (typeof window !== 'undefined') {
+      // 6. Store di sessionStorage HANYA untuk local mode atau temporary reference
+      // NOTE: Data utama sudah disimpan di assessment_cache via backend API
+      // sessionStorage hanya untuk fallback/offline mode
+      if (typeof window !== 'undefined' && String(recId).startsWith('local-')) {
         sessionStorage.setItem('skillmatch_result', JSON.stringify({
           scoreData,
           fitScore,
           strengthsList,
           recId,
-          roleCategory: scoreData.roleCategory
+          roleCategory: scoreData.roleCategory,
+          personalizedRecord
         }));
       }
 
-      // Create job recommendations in background (don't wait)
-      createJobRecommendations(recId, scoreData, personalizedRecord, strengthsList)
-        .catch(err => {
-          console.error('Error creating job recommendations:', err);
-        });
+      // 7. Create job recommendations di background (skip untuk local fallback)
+      if (!String(recId).startsWith('local-')) {
+        createJobRecommendations(recId, scoreData, personalizedRecord, strengthsList)
+          .catch(err => {
+            console.error('Error creating job recommendations:', err);
+            // Tetap lanjut redirect meski job recommendations gagal
+          });
+      }
 
-      // Redirect to personalized dashboard
-      console.log('✅ Redirecting to personalized with rec_id:', recId);
+      // 8. Auto-redirect to Personalized page
+      console.log('🚀 Redirecting to personalized with rec_id:', recId);
       setTimeout(() => {
         router.push(`/personalized?rec_id=${recId}`);
-      }, 500);
+      }, 400);
 
     } catch (err) {
       console.error('❌ Submit error:', err);
@@ -193,10 +235,11 @@ export function useSkillMatch(roleCategory) {
 /**
  * Create job recommendations in background
  * Matches jobs dengan skill gaps dan strengths user
+ * Score: 40% role match, 40% skill match, 20% experience match
  */
 async function createJobRecommendations(recId, scoreData, personalizedRecord, strengthsList) {
   try {
-    console.log('Starting job recommendations creation...');
+    console.log('🎯 Starting job recommendations creation for rec_id:', recId);
 
     // Get all jobs
     const jobsRes = await pekerjaanAPI.getAll(1, 100);
@@ -217,15 +260,18 @@ async function createJobRecommendations(recId, scoreData, personalizedRecord, st
     const strength = JSON.parse(personalizedRecord.strength || '{}');
     const skillGaps = JSON.parse(personalizedRecord.skill_gap || '[]');
     
-    // Match jobs dengan profile user
+    // Match & sort by score
     const matched = jobs
       .map(job => matchJobWithProfile(job, strength, skillGaps, scoreData.roleCategory, scoreData.traitAvg))
       .sort((a, b) => b.finalScore - a.finalScore)
       .slice(0, 5);
 
-    console.log(`Matched ${matched.length} jobs:`, matched.map(j => ({ name: j.nama_pekerjaan, score: j.finalScore })));
+    console.log(`Matched ${matched.length} jobs:`, matched.map(j => ({ 
+      name: j.nama_pekerjaan, 
+      score: j.finalScore 
+    })));
 
-    // Add recommendations to rec_pekerjaan
+    // Add recommendations ke rec_pekerjaan
     let addedCount = 0;
     for (const job of matched) {
       try {
@@ -234,13 +280,14 @@ async function createJobRecommendations(recId, scoreData, personalizedRecord, st
           pekerjaan_id: job.pekerjaan_id
         });
         addedCount++;
-        console.log(`Added job recommendation: ${job.nama_pekerjaan}`);
+        console.log(`✅ Added job recommendation: ${job.nama_pekerjaan}`);
       } catch (err) {
         console.error(`Error adding job ${job.pekerjaan_id}:`, err);
+        // Continue ke job berikutnya meski satu gagal
       }
     }
 
-    console.log(`Successfully added ${addedCount} job recommendations`);
+    console.log(`Successfully added ${addedCount}/${matched.length} job recommendations`);
 
   } catch (err) {
     console.error('Error in createJobRecommendations:', err);
@@ -249,7 +296,10 @@ async function createJobRecommendations(recId, scoreData, personalizedRecord, st
 
 /**
  * Match individual job dengan user profile
- * Score: 40% role match, 40% skill match, 20% experience match
+ * Score formula:
+ * - Role Match (40%): apakah bidang job sesuai dengan roleCategory user
+ * - Skill Match (40%): berapa banyak top3 skills user yang match dengan job requirements
+ * - Experience Match (20%): apakah level job sesuai dengan level user
  */
 function matchJobWithProfile(job, strength, skillGaps, roleCategory, traitScores) {
   // 1. Role Match (40%)

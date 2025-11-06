@@ -1,20 +1,19 @@
 "use client";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
-import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
-import { BookOpen, ExternalLink, Loader, AlertCircle } from "lucide-react";
+import { useRekomendasiSkillUp, ACADEMIES } from "@/hooks/useRekomendasiSkillUp";
+import { BookOpen, ExternalLink, Loader, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 
 export default function RekomendasiSkillUp() {
-  const { formattedSkills, skillGaps, loading, error } = usePersonalizedProfile();
-
-  const academies = [
-    { name: "Skillvul", src: "/skilvul.ico", link: "https://www.skillvul.com" },
-    { name: "Coursera", src: "/coursera-logo.png", link: "https://www.coursera.org" },
-    { name: "Google", src: "/growgoogle.jpg", link: "https://grow.google/certificates" },
-    { name: "Ruang Guru", src: "/ruangguru.jpg", link: "https://www.ruangguru.com/academy" },
-  ];
+  const {
+    recommendations,
+    loading,
+    error,
+    expandedItems,
+    toggleExpand,
+  } = useRekomendasiSkillUp();
 
   if (loading) {
     return (
@@ -41,9 +40,6 @@ export default function RekomendasiSkillUp() {
       </div>
     );
   }
-
-  // Combine skill gaps + formatted skills untuk rekomendasi lengkap
-  const recommendations = skillGaps.length > 0 ? skillGaps : formattedSkills;
 
   if (!recommendations || recommendations.length === 0) {
     return (
@@ -78,6 +74,8 @@ export default function RekomendasiSkillUp() {
             const skillDesc = item.description || item.skillup?.deskripsi || "Kembangkan skill ini untuk meningkatkan profil";
             const priority = item.priority;
             const priorityLabel = item.priorityLabel || "Medium";
+            const resources = item.resources || [];
+            const isExpanded = expandedItems.has(i);
 
             return (
               <motion.div
@@ -85,7 +83,7 @@ export default function RekomendasiSkillUp() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className={`p-4 rounded-lg border-l-4 ${
+                className={`rounded-lg border-l-4 overflow-hidden ${
                   priority === 5 || priority === "5"
                     ? "border-red-500 bg-red-50"
                     : priority === 4 || priority === "4"
@@ -93,42 +91,104 @@ export default function RekomendasiSkillUp() {
                     : "border-[#E4B200] bg-yellow-50"
                 }`}
               >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <p className="font-semibold text-[#2C2C2C]">{skillName}</p>
-                    <p className="text-sm text-gray-600 mt-1">{skillDesc}</p>
+                {/* Header - Clickable untuk expand */}
+                <div 
+                  onClick={() => toggleExpand(i)}
+                  className="p-4 cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-[#2C2C2C]">{skillName}</p>
+                        {priority && (
+                          <span className="text-xs font-bold px-2 py-1 rounded bg-white">
+                            {priorityLabel}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">{skillDesc}</p>
+                    </div>
+                    <button className="ml-3 text-gray-500 hover:text-gray-700">
+                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    </button>
                   </div>
-                  {priority && (
-                    <span className="text-xs font-bold px-2 py-1 rounded bg-white ml-2">
-                      {priorityLabel}
-                    </span>
-                  )}
+
+                  {/* Academy Links & Learn Button - Always visible */}
+                  <div className="flex items-center gap-2 mt-3">
+                    {ACADEMIES.map((academy, idx) => (
+                      <a
+                        key={idx}
+                        href={academy.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center justify-center w-8 h-8 rounded-full hover:scale-110 transition-transform border border-[#E4B200]/30 hover:border-[#FF8C00]/50 bg-white"
+                        title={academy.name}
+                      >
+                        <Image
+                          src={academy.src}
+                          alt={academy.name}
+                          width={20}
+                          height={20}
+                          className="object-contain"
+                        />
+                      </a>
+                    ))}
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Link ke academy atau resource pertama
+                        if (resources.length > 0) {
+                          window.open(resources[0], '_blank');
+                        }
+                      }}
+                      className="bg-[#FF8C00] hover:bg-[#E67600] text-white text-xs px-3 py-1 ml-auto"
+                    >
+                      Pelajari
+                    </Button>
+                  </div>
                 </div>
 
-                {/* === Academy Links & Learn Button === */}
-                <div className="flex items-center gap-2 mt-3">
-                  {academies.map((academy, idx) => (
-                    <a
-                      key={idx}
-                      href={academy.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center w-8 h-8 rounded-full hover:scale-110 transition-transform border border-[#E4B200]/30 hover:border-[#FF8C00]/50"
-                      title={academy.name}
+                {/* Expandable Details */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="overflow-hidden"
                     >
-                      <Image
-                        src={academy.src}
-                        alt={academy.name}
-                        width={20}
-                        height={20}
-                        className="object-contain"
-                      />
-                    </a>
-                  ))}
-                  <Button className="bg-[#FF8C00] hover:bg-[#E67600] text-white text-xs px-3 py-1 ml-auto">
-                    Pelajari
-                  </Button>
-                </div>
+                      <div className="px-4 pb-4 pt-0 bg-white/50 border-t border-gray-200">
+                        {resources.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-xs font-semibold text-gray-700 mb-2">Sumber Belajar:</p>
+                            <ul className="space-y-1">
+                              {resources.map((resource, idx) => (
+                                <li key={idx}>
+                                  <a
+                                    href={resource}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-[#E4B200] hover:text-[#FF8C00] flex items-center gap-1"
+                                  >
+                                    <ExternalLink size={12} />
+                                    {resource}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {resources.length === 0 && (
+                          <p className="text-xs text-gray-600 italic">
+                            Gunakan platform academy di atas untuk mempelajari skill ini lebih lanjut.
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             );
           })}

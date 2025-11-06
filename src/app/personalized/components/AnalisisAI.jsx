@@ -1,6 +1,6 @@
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
+import { useAnalisisAI } from "@/hooks/useAnalisisAI";
 import {
   Briefcase,
   Target,
@@ -14,12 +14,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-
+import { getDimensionExplanation, getDimensionFullName } from "@/lib/utils/dimensionDescriptions";
 
 export default function AnalisisAI() {
   const {
     profile,
-    user,
+    userName,
     loading,
     error,
     roleFit,
@@ -28,7 +28,14 @@ export default function AnalisisAI() {
     skillGaps,
     nextSteps,
     formattedJobs,
-  } = usePersonalizedProfile();
+    aiStatus,
+    hasAIInsight,
+    expanded,
+    toggle,
+    refreshAIAnalysis,
+    refreshingAI,
+    isStaticFallback,
+  } = useAnalisisAI();
 
   if (loading) {
     return (
@@ -56,7 +63,6 @@ export default function AnalisisAI() {
     );
   }
 
-  const userName = user?.name || "Pengguna Arunika";
 
 
 
@@ -65,89 +71,312 @@ export default function AnalisisAI() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="p-8 pt-24 space-y-8"
+      className="p-8 pt-8 space-y-4"
     >
-      {/* === WELCOME CARD === */}
-      <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-md text-[#2C2C2C]">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">
-            Selamat Datang, {userName}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-700">
-            Role Fit Anda: <span className="font-bold text-[#FF8C00]">{roleFit}%</span>
-            {roleFit >= 75 && " - Sudah siap untuk apply!"}
-            {roleFit < 60 && " - Fokus pada skill gap di bawah."}
-            {roleFit >= 60 && roleFit < 75 && " - Tingkatkan beberapa skill lagi."}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* === SUMMARY === */}
-      <div className="grid grid-cols-3 gap-4">
-        {summaryMetrics.map((metric, idx) => (
-          <motion.div
-            key={metric.title}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: idx * 0.1 }}
-          >
-            <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 p-4 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
-              <div className={`${metric.color} mb-2`}>
-                {metric.title === "Role Fit" && <Target className="h-5 w-5" />}
-                {metric.title === "Level" && <TrendingUp className="h-5 w-5" />}
-                {metric.title === "Skill Gaps" && <Briefcase className="h-5 w-5" />}
-              </div>
-              <p className="text-lg font-bold text-[#2C2C2C]">{metric.value}</p>
-              <p className="text-sm text-gray-600">{metric.title}</p>
-              {metric.benchmark && (
-                <p className="text-xs text-[#FF8C00] font-semibold mt-1">
-                  {metric.benchmark}
+      {/* Welcome Section */}
+        <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-sm">
+          <CardContent className="p-4 lg:p-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-[#2C2C2C] mb-1">Analisis Detail</h3>
+                <p className="text-sm text-gray-600">
+                  Selamat datang, <span className="font-medium text-[#E4B200]">{userName}</span>. Berikut analisis detail
+                  berdasarkan profil karir Anda.
                 </p>
-              )}
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* === ANALISIS AI (DARI AnalisisAI.jsx) === */}
-      {strengths.topThree && strengths.topThree.length > 0 && (
-        <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-md mt-8">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-[#FF8C00]" />
-              Strengthen (Kekuatan Utama)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {strengths.topThree.map((strength, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="flex items-start gap-3 bg-[#FFFDF5] rounded-xl border border-[#E4B200]/20 p-3"
-              >
-                <CheckCircle2 className="h-5 w-5 text-[#FF8C00] mt-1 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-[#2C2C2C]">{strength}</p>
-                  <p className="text-sm text-gray-700">
-                    Salah satu kekuatan utama dalam profil karir Anda
-                  </p>
-                </div>
-              </motion.div>
-            ))}
+      {/* === AI STATUS INDICATOR === */}
+      {(!hasAIInsight && aiStatus && aiStatus !== 'completed') && (
+        <Card className="bg-yellow-50 border border-yellow-200">
+          <CardContent className="p-4 text-sm text-yellow-900 flex items-center gap-2">
+            <Loader className="h-4 w-4 animate-spin" />
+            AI sedang memproses analisis Anda. Halaman ini akan menampilkan hasil begitu siap.
           </CardContent>
         </Card>
       )}
 
+      {/* === AI ANALYSIS (from backend or static fallback) === */}
+      <Card className="bg-[#FFFDF5] border border-[#E4B200]/30 shadow-md">
+        <CardHeader>
+          <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-[#FF8C00]" />
+              Analisis AI
+            </div>
+            <Button
+              onClick={async () => {
+                console.log('🔘 Generate/Regenerasi AI Analysis clicked');
+                console.log('📊 Current state:', { 
+                  hasAIInsight, 
+                  isStaticFallback, 
+                  aiStatus, 
+                  refreshingAI,
+                  profile: profile ? 'exists' : 'null'
+                });
+                try {
+                  await refreshAIAnalysis('detailed');
+                } catch (err) {
+                  console.error('❌ Error generating AI analysis:', err);
+                  alert('Gagal generate analisis AI. Silakan coba lagi atau hubungi support.');
+                }
+              }}
+              disabled={refreshingAI || aiStatus === 'pending'}
+              size="sm"
+              className="bg-[#FF8C00] hover:bg-[#E67600] text-white transition-all duration-300 hover:shadow-lg hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {refreshingAI ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin mr-2" />
+                  Memproses...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {isStaticFallback || !hasAIInsight ? 'Generate Analisis AI' : 'Regenerasi Analisis'}
+                </>
+              )}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-[#2C2C2C]">
+          {hasAIInsight && typeof profile.ai_insight === 'object' ? (
+              <div className="space-y-4">
+                {profile.ai_insight.personality_summary && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Ringkasan Kepribadian</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('personality')}>
+                        {expanded.personality ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.personality && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {profile.ai_insight.personality_summary}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {profile.ai_insight.detail_peran && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Detail Peran & Potensi</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('jobfit')}>
+                        {expanded.jobfit ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.jobfit && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {profile.ai_insight.detail_peran}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {profile.ai_insight.potensi_karir && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Potensi Karir</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('potensi')}>
+                        {expanded.potensi ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.potensi && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {profile.ai_insight.potensi_karir}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Fallback untuk job_fit_analysis (format lama) */}
+                {!profile.ai_insight.detail_peran && profile.ai_insight.job_fit_analysis && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Analisis Job Fit</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('jobfit')}>
+                        {expanded.jobfit ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.jobfit && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {profile.ai_insight.job_fit_analysis}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {profile.ai_insight.development_areas && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Area Pengembangan</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('development')}>
+                        {expanded.development ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.development && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {profile.ai_insight.development_areas}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {profile.ai_insight.next_steps && (
+                  <div className="bg-[#FFFDF5] rounded-lg border border-[#E4B200]/20">
+                    <div className="flex items-center justify-between p-3">
+                      <p className="font-semibold">Langkah Selanjutnya</p>
+                      <Button size="sm" variant="outline" onClick={() => toggle('next')}>
+                        {expanded.next ? 'Sembunyikan' : 'Lihat selengkapnya'}
+                      </Button>
+                    </div>
+                    {expanded.next && (
+                      <div className="px-3 pb-3 text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {profile.ai_insight.next_steps}
+                      </div>
+                    )}
+                  </div>
+                )}
+            </div>
+          ) : hasAIInsight && profile.ai_insight ? (
+            <p className="text-gray-700">{String(profile.ai_insight)}</p>
+          ) : (
+            <div className="text-center py-8">
+              <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-gray-600 mb-2">Belum ada analisis AI</p>
+              <p className="text-sm text-gray-500">Klik tombol "Generate Analisis AI" di kanan atas untuk memulai</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* === STRENGTHEN (KEKUATAN UTAMA) === */}
+      {strengths.topThree && strengths.topThree.length > 0 && (() => {
+        // Helper untuk get dimension info dengan handling conflict
+        const getDimensionInfo = (dimensionCode) => {
+          // Cek apakah ini dari DISC atau RIASEC berdasarkan profile scores
+          const discScores = profile?.disc_profile?.scores || profile?.disc_profile?.scores_detail || {};
+          const riasecScores = profile?.riasec_profile?.scores || profile?.riasec_profile?.scores_detail || {};
+          
+          const isDISC = discScores[dimensionCode] !== undefined;
+          const isRIASEC = riasecScores[dimensionCode] !== undefined;
+          
+          // Mapping untuk handle conflict I dan S
+          let correctCode = dimensionCode;
+          let dimensionName = dimensionCode;
+          
+          // Handle conflict: I bisa DISC Influence atau RIASEC Investigative
+          if (dimensionCode === 'I') {
+            if (isDISC) {
+              correctCode = 'I';
+              dimensionName = 'Influence';
+            } else if (isRIASEC) {
+              correctCode = 'I_RIASEC';
+              dimensionName = 'Investigative';
+            } else {
+              // Default ke DISC jika tidak jelas
+              correctCode = 'I';
+              dimensionName = 'Influence';
+            }
+          } 
+          // Handle conflict: S bisa DISC Steadiness atau RIASEC Social
+          else if (dimensionCode === 'S') {
+            if (isDISC) {
+              correctCode = 'S';
+              dimensionName = 'Steadiness';
+            } else if (isRIASEC) {
+              correctCode = 'S_RIASEC';
+              dimensionName = 'Social';
+            } else {
+              correctCode = 'S';
+              dimensionName = 'Steadiness';
+            }
+          }
+          // Handle conflict: C bisa DISC Conscientiousness atau RIASEC Conventional
+          else if (dimensionCode === 'C') {
+            if (isDISC) {
+              correctCode = 'C';
+              dimensionName = 'Conscientiousness';
+            } else if (isRIASEC) {
+              correctCode = 'C_RIASEC';
+              dimensionName = 'Conventional';
+            } else {
+              correctCode = 'C';
+              dimensionName = 'Conscientiousness';
+            }
+          }
+          // Non-conflict dimensions
+          else {
+            dimensionName = getDimensionFullName(dimensionCode) || dimensionCode;
+          }
+
+          // Get insight/explanation
+          const insight = getDimensionExplanation(correctCode) || 
+                        getDimensionExplanation(dimensionCode) ||
+                        'Salah satu kekuatan utama dalam profil karir Anda yang membantu Anda mencapai kesuksesan di bidang yang sesuai.';
+
+          return {
+            name: dimensionName,
+            letter: dimensionCode,
+            insight: insight
+          };
+        };
+
+        return (
+          <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-md mt-8">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-[#FF8C00]" />
+                Strengthen (Kekuatan Utama)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {strengths.topThree.map((dimensionCode, i) => {
+                const dimensionInfo = getDimensionInfo(dimensionCode);
+                return (
+                  <motion.div
+                    key={`${dimensionCode}-${i}`}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="flex items-start gap-3 bg-[#FFFDF5] rounded-xl border border-[#E4B200]/20 p-4"
+                  >
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[#FF8C00] flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">{dimensionInfo.letter}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-[#2C2C2C] mb-1">{dimensionInfo.name}</p>
+                      <p className="text-sm text-gray-700 leading-relaxed">
+                        {dimensionInfo.insight}
+                      </p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {skillGaps.length > 0 && (
         <Card className="bg-gradient-to-r from-[#FFFDF5] to-[#FFF6DC] border border-[#E4B200]/30 shadow-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center gap-2">
-              <ArrowUpRight className="h-5 w-5 text-[#E4B200]" />
-              Skill Gap & Pengembangan
+            <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ArrowUpRight className="h-5 w-5 text-[#E4B200]" />
+                <span>Skill Gap & Pengembangan</span>
+              </div>
+              <Button
+                onClick={() => {
+                  // Navigate ke rekom-skill page
+                  const currentUrl = new URL(window.location.href);
+                  const idParam = currentUrl.searchParams.get('id') || '';
+                  window.location.href = `/personalized?id=${idParam}&menu=rekom-skill`;
+                }}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                Lihat Semua
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -170,7 +399,16 @@ export default function AnalisisAI() {
                     </span>
                   </div>
                 </div>
-                <Button className="bg-[#FF8C00] hover:bg-[#E67600] text-white text-xs px-3 py-1">
+                <Button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Navigate ke rekom-skill page
+                    const currentUrl = new URL(window.location.href);
+                    const idParam = currentUrl.searchParams.get('id') || '';
+                    window.location.href = `/personalized?id=${idParam}&menu=rekom-skill`;
+                  }}
+                  className="bg-[#FF8C00] hover:bg-[#E67600] text-white text-xs px-3 py-1"
+                >
                   Pelajari
                 </Button>
               </motion.div>
@@ -282,15 +520,38 @@ export default function AnalisisAI() {
       {formattedJobs.length > 0 && (
         <Card className="bg-[#FFFDF5] border border-[#E4B200]/30 shadow-md">
           <CardHeader>
-            <CardTitle className="text-lg font-bold text-[#2C2C2C]">
-              Lowongan Terbaik Untukmu
+            <CardTitle className="text-lg font-bold text-[#2C2C2C] flex items-center justify-between">
+              <span>Lowongan Terbaik Untukmu</span>
+              <Button
+                onClick={() => {
+                  // Navigate ke rekom-pekerjaan page
+                  const currentUrl = new URL(window.location.href);
+                  const idParam = currentUrl.searchParams.get('id') || '';
+                  window.location.href = `/personalized?id=${idParam}&menu=rekom-pekerjaan`;
+                }}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                Lihat Semua
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {formattedJobs.slice(0, 3).map((job, idx) => (
-              <div
+              <motion.div
                 key={job.id || idx}
-                className="flex justify-between items-center p-3 bg-[#FFF6DC] rounded-lg border border-[#E4B200]/30 hover:shadow-md transition-shadow"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                onClick={() => {
+                  // Navigate ke rekom-pekerjaan dengan role parameter
+                  const roleParam = encodeURIComponent(job.role);
+                  const currentUrl = new URL(window.location.href);
+                  const idParam = currentUrl.searchParams.get('id') || '';
+                  window.location.href = `/personalized?id=${idParam}&menu=rekom-pekerjaan&role=${roleParam}`;
+                }}
+                className="flex justify-between items-center p-3 bg-[#FFF6DC] rounded-lg border border-[#E4B200]/30 hover:shadow-md transition-shadow cursor-pointer hover:bg-[#FFE89C]"
               >
                 <div>
                   <p className="font-semibold text-[#2C2C2C]">{job.role}</p>
@@ -300,7 +561,7 @@ export default function AnalisisAI() {
                   <p className="font-bold text-[#FF8C00]">{job.match}%</p>
                   <p className="text-xs text-gray-600">{job.badge}</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </CardContent>
         </Card>

@@ -16,7 +16,7 @@ export default function useMotionPresets({
   const fadeUp = useMemo(
     () => ({
       hidden: { opacity: 0, y: 14, filter: "blur(2px)" },
-      show:   { opacity: 1, y: 0,  filter: "blur(0)", transition: { duration, ease } },
+      show:   { opacity: 1, y: 0,  filter: "blur(0px)", transition: { duration, ease } },
     }),
     [duration, ease]
   );
@@ -24,7 +24,7 @@ export default function useMotionPresets({
   const fadeDown = useMemo(
     () => ({
       hidden: { opacity: 0, y: -14, filter: "blur(2px)" },
-      show:   { opacity: 1, y: 0,   filter: "blur(0)", transition: { duration, ease } },
+      show:   { opacity: 1, y: 0,   filter: "blur(0px)", transition: { duration, ease } },
     }),
     [duration, ease]
   );
@@ -32,7 +32,7 @@ export default function useMotionPresets({
   const fadeIn = useMemo(
     () => ({
       hidden: { opacity: 0, filter: "blur(2px)" },
-      show:   { opacity: 1, filter: "blur(0)", transition: { duration, ease } },
+      show:   { opacity: 1, filter: "blur(0px)", transition: { duration, ease } },
     }),
     [duration, ease]
   );

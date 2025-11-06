@@ -1,6 +1,6 @@
 "use client";
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -12,11 +12,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, LogIn, Chrome, Home } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { Mail, Lock, LogIn, Home, Eye, EyeOff } from "lucide-react";
+import { signIn, useSession, getSession } from "next-auth/react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
 import { FcGoogle } from "react-icons/fc";
+import { useAuthStore } from "@/lib/store/auth";
+import { extractErrorMessage, formatApiError } from "@/lib/utils/errorHandler";
 
 const Separator = () => (
   <div className="relative my-4">
@@ -31,11 +33,146 @@ const Separator = () => (
   </div>
 );
 
-const LoginPage = () => {
-  const router = useRouter();
+const getRedirectPath = (hasAssessment) => hasAssessment ? '/personalized' : '/skill-match';
+
+function LoginContent() {
+  const searchParams = useSearchParams();
+  const login = useAuthStore((state) => state.login);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { data: session, status } = useSession();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const processingOAuthRef = useRef(false);
+  const hasProcessedRef = useRef(false);
+
+  const resetLoadingState = useCallback(() => {
+    processingOAuthRef.current = false;
+    setIsLoading(false);
+  }, []);
+
+  const redirectAfterAuth = useCallback((hasAssessment) => {
+    resetLoadingState();
+    window.location.href = getRedirectPath(hasAssessment);
+  }, [resetLoadingState]);
+
+  const handleOAuthSuccess = useCallback(async (session) => {
+    if (processingOAuthRef.current || hasProcessedRef.current) {
+      return;
+    }
+
+    if (isAuthenticated) {
+      const hasAssessment = useAuthStore.getState().user?.has_assessment || false;
+      redirectAfterAuth(hasAssessment);
+      return;
+    }
+
+    processingOAuthRef.current = true;
+    setIsLoading(true);
+
+    try {
+      // Use NextAuth session data directly - backend sync is handled in NextAuth callbacks
+      const { accessToken, refreshToken, user } = session;
+      
+      // Cek apakah user sudah punya assessment dari token atau user data
+      // Backend sync sudah dilakukan di NextAuth JWT callback, token mungkin sudah ada
+      const hasAssessment = session.user?.has_assessment || 
+                           user?.has_assessment || 
+                           false;
+      
+      // Login dengan data dari NextAuth session
+      login({
+        access_token: accessToken || 'oauth_token',
+        refresh_token: refreshToken || 'oauth_refresh',
+        user: {
+          id: user?.id || user?.email,
+          email: user?.email,
+          name: user?.name || user?.email,
+          has_assessment: hasAssessment,
+          ...user,
+        },
+        profile: {
+          user_id: user?.id || user?.email,
+          email: user?.email,
+          name: user?.name || user?.email,
+          has_assessment: hasAssessment,
+          ...user,
+        },
+      });
+      
+      hasProcessedRef.current = true;
+      // Redirect berdasarkan assessment status
+      redirectAfterAuth(hasAssessment);
+    } catch (err) {
+      console.error('OAuth sync error:', err);
+      setError("Gagal menyinkronkan akun Google. Silakan coba lagi.");
+      resetLoadingState();
+    }
+  }, [isAuthenticated, login, redirectAfterAuth, resetLoadingState]);
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    const code = searchParams.get('code');
+    const callbackUrl = searchParams.get('callbackUrl');
+    
+    if (isAuthenticated || hasProcessedRef.current) {
+      return;
+    }
+    
+    if (errorParam && errorParam !== 'OAuthCallback') {
+      setError("Terjadi kesalahan saat login dengan Google. Silakan coba lagi.");
+      return;
+    }
+    
+    if (status === 'authenticated' && session) {
+      handleOAuthSuccess(session);
+    } else if (status === 'unauthenticated') {
+      if (callbackUrl || code || errorParam === 'OAuthCallback') {
+        if (isAuthenticated) {
+          const hasAssessment = useAuthStore.getState().user?.has_assessment || false;
+          redirectAfterAuth(hasAssessment);
+          return;
+        }
+        
+        if (!processingOAuthRef.current) {
+          processingOAuthRef.current = true;
+          
+          let attempts = 0;
+          const maxAttempts = 5;
+          
+          const checkSession = async () => {
+            attempts++;
+            try {
+              if (isAuthenticated) {
+                processingOAuthRef.current = false;
+                return;
+              }
+              
+              const refreshedSession = await getSession();
+              
+              if (refreshedSession) {
+                await handleOAuthSuccess(refreshedSession);
+              } else if (attempts < maxAttempts) {
+                setTimeout(checkSession, 1000);
+              } else {
+                resetLoadingState();
+              }
+            } catch (err) {
+              console.error('Session refresh error:', err);
+              if (attempts < maxAttempts) {
+                setTimeout(checkSession, 1000);
+              } else {
+                resetLoadingState();
+              }
+            }
+          };
+          
+          setTimeout(checkSession, 500);
+        }
+      }
+    }
+  }, [searchParams, status, session, isAuthenticated, handleOAuthSuccess, redirectAfterAuth, resetLoadingState]);
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -51,32 +188,41 @@ const LoginPage = () => {
     try {
       const response = await authAPI.login(formData.email, formData.password);
       if (response?.data?.success) {
-        const { access_token, refresh_token, user } = response.data.data;
-
-        // Simpan tokens & user data
-        localStorage.setItem("access_token", access_token);
-        localStorage.setItem("refresh_token", refresh_token);
-        localStorage.setItem("user", JSON.stringify(user));
+        const userData = response.data.data;
+        login(userData);
         
-        // ✅ TAMBAH: Simpan user_id
-        localStorage.setItem("user_id", user.id);
+        // Check has_assessment untuk redirect yang tepat
+        const hasAssessment = userData?.user?.has_assessment || 
+                             userData?.profile?.has_assessment || 
+                             userData?.has_assessment || 
+                             false;
         
-        console.log('Login success, saved user_id:', user.id);
-
-        // ✅ UBAH: Redirect ke skill-match dulu, bukan dashboard
-        router.push("/skill-match");
+        window.location.href = getRedirectPath(hasAssessment);
       } else {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
     } catch (err) {
-      setError("Terjadi kesalahan saat login. Silakan coba lagi.");
+      // Only log meaningful errors in development
+      if (process.env.NODE_ENV === 'development') {
+        const errorMsg = extractErrorMessage(err);
+        if (errorMsg) {
+          console.error('Login error:', errorMsg);
+        }
+      }
+      
+      // Use centralized error formatting
+      const errorMessage = formatApiError(err, "Terjadi kesalahan saat login. Silakan coba lagi.");
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/skill-match" });
+    signIn("google", { 
+      callbackUrl: "/personalized",
+      redirect: true
+    });
   };
 
   return (
@@ -146,17 +292,30 @@ const LoginPage = () => {
                 </a>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Masukkan kata sandi Anda"
                   value={formData.password}
                   onChange={handleChange}
                   required
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   disabled={isLoading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none z-10"
+                  disabled={isLoading}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -181,6 +340,19 @@ const LoginPage = () => {
       </Card>
     </div>
   );
-};
+}
 
-export default LoginPage;
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Memuat...</p>
+        </div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
+  );
+}

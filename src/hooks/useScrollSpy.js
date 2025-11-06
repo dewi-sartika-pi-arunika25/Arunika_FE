@@ -51,8 +51,9 @@ export function useScrollSpy(ids, offset = 120) {
     );
 
     const revealNodes = document.querySelectorAll(".reveal");
-    revealNodes.forEach((el, i) => {
-      el.style.setProperty("--reveal-delay", `${i * 60}ms`);
+    revealNodes.forEach((el) => {
+      // Delay is now set via CSS nth-child selector to avoid hydration mismatch
+      // No need to set inline style anymore
       el.classList.add("reveal-hide");
       io.observe(el);
     });
@@ -66,6 +67,5 @@ export function useScrollSpy(ids, offset = 120) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       io.disconnect();
     };
-  // gunakan idsJoin agar deps stabil; offset angka stabil
-  }, [idsJoin, offset]);
+  }, [ids, idsJoin, offset]);
 }

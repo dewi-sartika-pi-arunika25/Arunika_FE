@@ -55,7 +55,11 @@ export default function Parallax({
   );
 
   return (
-    <motion.section ref={ref} style={style} className={className}>
+    <motion.section 
+      ref={ref} 
+      style={{ ...style, position: 'relative' }} 
+      className={className}
+    >
       {children}
     </motion.section>
   );

@@ -1,8 +1,7 @@
 "use client";
-
-import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
-import Parallax from "./Parallax";
+import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useThrottle } from "@/hooks/useThrottle";
 import CTAButton from "./CTAButton";
 
 export default function HeroBase({
@@ -12,157 +11,139 @@ export default function HeroBase({
   ctas = [],
   bgUrl,
   align = "center",
-  navOffset = false,
-  scrollLink, // { label, href }
+  navOffset = true,
+  scrollLink,
 }) {
-  const alignText =
-    align === "left" ? "text-left items-start" : "text-center items-center";
-
-  // overlay lembut agar teks kebaca
-  const wash =
-    "linear-gradient(180deg, rgba(255,253,244,.92) 0%, rgba(255,253,244,.78) 36%, rgba(255,253,244,.56) 100%)";
-  const centerScrim = "linear-gradient(0deg, rgba(20,22,28,.16), rgba(20,22,28,.16))";
-
-  // show/hide konten saat scroll
+  const ref = useRef(null);
+  const shouldReduceMotion = useReducedMotion();
+  const alignText = align === "left" ? "text-left items-start" : "text-center items-center";
   const [visible, setVisible] = useState(true);
   const lastY = useRef(0);
-  const topClamp = 24;
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || 0;
-      const goingUp = y < lastY.current;
-      const nearTop = y <= topClamp;
-      setVisible(nearTop || goingUp);
-      lastY.current = y;
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+
+  // Throttle scroll handler to improve performance
+  const handleScroll = useCallback(() => {
+    const y = window.scrollY || 0;
+    const up = y < lastY.current;
+    const nearTop = y <= 24;
+    setVisible(nearTop || up);
+    lastY.current = y;
   }, []);
 
-  // spotlight konten
-  const wrapRef = useRef(null);
-  const onMouseMove = (e) => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    el.style.setProperty("--mx", `${x}px`);
-    el.style.setProperty("--my", `${y}px`);
-  };
+  const throttledScroll = useThrottle(handleScroll, 100);
+
+  useEffect(() => {
+    // Initial check
+    handleScroll();
+    window.addEventListener("scroll", throttledScroll, { passive: true });
+    return () => window.removeEventListener("scroll", throttledScroll);
+  }, [throttledScroll, handleScroll]);
+
+  // Optimize scroll transforms with reduced motion support
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
+  
+  // Create transforms only once (useTransform hooks must be called at top level)
+  const bgScale = shouldReduceMotion ? 1 : useTransform(scrollYProgress, [0, 1], [1, 1.12]);
+  const bgY = shouldReduceMotion ? 0 : useTransform(scrollYProgress, [0, 1], [0, 48]);
+  const titleY = shouldReduceMotion ? 0 : useTransform(scrollYProgress, [0, 1], [0, -14]);
+  const subtitleOpacity = shouldReduceMotion ? 1 : useTransform(scrollYProgress, [0, 0.25, 1], [1, 1, 0.85]);
+  
+  const transforms = useMemo(() => ({
+    bgScale,
+    bgY,
+    titleY,
+    subtitleOpacity,
+  }), [bgScale, bgY, titleY, subtitleOpacity]);
 
   return (
     <section
+      ref={ref}
       id="hero"
       aria-label="Bagian pembuka"
       className="relative w-screen mx-[calc(50%-50vw)] overflow-hidden"
       style={{
-        paddingTop: navOffset ? "var(--nav-h, 72px)" : undefined,
-        marginTop: navOffset ? undefined : "calc(var(--nav-h, 72px) * -1)",
+        position: 'relative', // Fix for scroll offset calculation
+        marginTop: "calc(var(--nav-h,72px) * -1)",
+        paddingTop: navOffset ? "calc(var(--nav-h,72px) + 24px)" : undefined,
       }}
     >
-      {/* Background nempel ke atas + parallax */}
       {bgUrl && (
         <>
-          <Parallax
-            className="absolute inset-0 -z-20 will-change-transform"
-            yStrength={120}
-            scaleFrom={1}
-            scaleTo={1.05}
-            mouseTilt
-            disabledBelow={768}
-          >
-            <div
-              aria-hidden
-              className="absolute inset-0 bg-center bg-cover"
-              style={{
-                backgroundImage: `url(${bgUrl})`,
-                top: "calc(var(--nav-h, 72px) * -1)",
-                height: "calc(100% + var(--nav-h, 72px))",
-                position: "absolute",
-                insetInline: 0,
-              }}
-            />
-          </Parallax>
-          <div aria-hidden className="absolute inset-0 -z-10" style={{ background: wash }} />
-          <div aria-hidden className="absolute inset-0 -z-10" style={{ background: centerScrim }} />
+          <motion.div
+            aria-hidden
+            className="absolute inset-0 -z-20 bg-center bg-cover will-change-transform"
+            style={{ backgroundImage: `url(${bgUrl})`, top: 0, height: "100%", scale: transforms.bgScale, y: transforms.bgY }}
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0 -z-10"
+            style={{ background: "linear-gradient(180deg, rgba(255,253,244,.88) 0%, rgba(255,253,244,.76) 36%, rgba(255,253,244,.56) 100%)" }}
+          />
+          <div aria-hidden className="absolute inset-0 -z-10" style={{ background: "linear-gradient(0deg, rgba(20,22,28,.14), rgba(20,22,28,.14))" }} />
         </>
       )}
 
-      {/* Content wrapper — diturunkan + spotlight halus */}
       <div
-        ref={wrapRef}
-        onMouseMove={onMouseMove}
-        className="relative z-10 flex items-center justify-center px-6 sm:px-10 md:px-14 lg:px-20"
-        style={{
-          minHeight: "84vh",
-          maxHeight: "96vh",
-          paddingTop: "clamp(12vh, 14vh, 16vh)",
-          paddingBottom: "clamp(8vh, 10vh, 12vh)",
-          background:
-            "radial-gradient(200px 160px at var(--mx, 50%) var(--my, 50%), color-mix(in oklab, var(--background) 40%, transparent), transparent 70%)",
-          transition: "background .15s ease",
-        }}
+        className="relative z-10 flex items-center justify-center px-6 sm:px-8 md:px-12"
+        style={{ minHeight: "88vh", maxHeight: "96vh", paddingTop: "clamp(8vh, 11vh, 13vh)", paddingBottom: "clamp(8vh, 10vh, 12vh)" }}
       >
         <AnimatePresence initial mode="popLayout">
           {visible && (
             <motion.div
               key="hero-content"
-              initial={{ opacity: 0, y: 18, scale: 0.995 }}
+              initial={{ opacity: 0, y: 22, scale: 0.995 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -14, scale: 0.995 }}
+              exit={{ opacity: 0, y: -16, scale: 0.995 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
-              className={`mx-auto flex max-w-4xl flex-col gap-4 ${alignText}`}
+              className={`wrap w-full mx-auto flex flex-col ${alignText} gap-7 max-w-[1120px]`}
+              style={{ y: transforms.titleY }}
             >
               {eyebrow && (
-                <p
-                  className="uppercase tracking-[0.18em] text-[11px] sm:text-xs"
-                  style={{ color: "var(--accent-2)" }}
-                >
+                <p className="uppercase tracking-[0.18em] text-[11px] sm:text-xs" style={{ color: "var(--accent-2)" }}>
                   {eyebrow}
                 </p>
               )}
 
-              <h1
-                className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-[var(--text)]"
-                style={{ transition: "transform .18s ease" }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.01)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-              >
-                {title}
-              </h1>
+              <h1 className="text-[var(--text)]">{title}</h1>
 
               {subtitle && (
-                <motion.p
-                  whileHover={{ scale: 1.01 }}
-                  transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                  className={`text-base sm:text-lg leading-relaxed max-w-2xl ${align === "center" ? "mx-auto" : ""}`}
-                  style={{ color: "color-mix(in oklab, var(--text) 88%, transparent)" }}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.6 }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                  className="mx-auto w-full max-w-[1000px] space-y-5"
+                  style={{ opacity: transforms.subtitleOpacity, color: "color-mix(in oklab, var(--text) 90%, transparent)" }}
                 >
                   {subtitle}
-                </motion.p>
+                </motion.div>
               )}
 
               {!!ctas.length && (
-                <div className={`mt-4 flex gap-3 flex-wrap ${align === "center" ? "justify-center" : ""}`}>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.6 }}
+                  transition={{ duration: 0.4, ease: "easeOut", delay: 0.05 }}
+                  className="mt-2 flex gap-3 flex-wrap justify-center"
+                >
                   {ctas.map((c) => (
                     <CTAButton key={c.label} {...c} />
                   ))}
-                </div>
+                </motion.div>
               )}
 
-              {/* (hapus microcopy gratis) */}
-
-              {/* Link scroll: teks saja + efek hover */}
               {scrollLink?.href && (
-                <div className="mt-6 flex justify-center">
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.6 }}
+                  transition={{ duration: 0.35, ease: "easeOut", delay: 0.1 }}
+                  className="mt-2 flex justify-center"
+                >
                   <a
                     href={scrollLink.href}
                     className="group inline-flex items-center gap-1 text-sm font-medium tracking-wide"
-                    style={{
-                      color: "color-mix(in oklab, var(--text) 78%, transparent)",
-                    }}
+                    style={{ color: "color-mix(in oklab, var(--text) 80%, transparent)" }}
                   >
                     <span className="relative">
                       {scrollLink.label || "Lihat keunggulan kami"}
@@ -174,23 +155,16 @@ export default function HeroBase({
                       fill="none"
                       aria-hidden="true"
                     >
-                      <path
-                        d="M12 5v14m0 0l-6-6m6 6l6-6"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                      <path d="M12 5v14m0 0l-6-6m6 6l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </a>
-                </div>
+                </motion.div>
               )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Wave bawah */}
       <svg aria-hidden className="block w-full translate-y-px" viewBox="0 0 1440 110" preserveAspectRatio="none">
         <path d="M0,70 C420,150 1020,0 1440,70 L1440,110 L0,110 Z" fill="var(--background)" />
       </svg>

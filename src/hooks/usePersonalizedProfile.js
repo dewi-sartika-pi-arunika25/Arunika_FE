@@ -1,7 +1,11 @@
 // hooks/usePersonalizedProfile.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI, usersAPI } from '@/lib/api';
+import { personalizedAPI, recommendationsAPI, skillupAPI, usersAPI, assessmentAPI } from '@/lib/api';
+import { logWarning, logError } from '@/lib/utils/logger';
+import { COLORS } from '@/lib/config/constants';
+import { getWithExpiry } from '@/lib/utils/storage';
+import { useAuthStore } from '@/lib/store/auth';
 
 /**
  * Main hook untuk personalized dashboard
@@ -10,19 +14,173 @@ import { personalizedAPI, recPekerjaanAPI, recSkillupAPI, skillupAPI, usersAPI }
  */
 export function usePersonalizedProfile() {
   const searchParams = useSearchParams();
-  const recId = searchParams.get('rec_id');
   
+  // Ambil recId dari berbagai sumber (rec_id, id, atau profile data)
   const [profile, setProfile] = useState(null);
+  
+  // recId sebagai computed value dengan useMemo - update ketika searchParams atau profile berubah
+  // PRIORITAS: rec_id param > id param (jika UUID) > profile data
+  const recId = useMemo(() => {
+    // 1. Cek query parameter rec_id (prioritas tertinggi)
+    const fromQueryRecId = searchParams.get('rec_id');
+    if (fromQueryRecId) return fromQueryRecId;
+    
+    // 2. Cek query parameter id - bisa jadi rec_id atau user_id
+    const fromQueryId = searchParams.get('id');
+    if (fromQueryId) {
+      // Jika id adalah UUID (format personalized rec_id), gunakan langsung
+      // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars dengan dashes)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(fromQueryId)) {
+        return fromQueryId; // Kemungkinan rec_id
+      }
+      // Jika bukan UUID, mungkin user_id - akan di-resolve via API nanti
+    }
+    
+    // 3. Cek dari profile data yang sudah di-fetch (jika ada)
+    // Cek berbagai kemungkinan field: rec_id, id (jika UUID), atau field lain
+    if (profile?.rec_id) return profile.rec_id;
+    // Cek apakah profile.id adalah UUID (format personalized rec_id)
+    if (profile?.id) {
+      const idStr = String(profile.id);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(idStr) || idStr.length > 20) {
+        // Jika UUID atau panjang, kemungkinan rec_id
+        return idStr;
+      }
+    }
+    
+    return null;
+  }, [searchParams, profile]);
+  
+  const isLocalRec = recId && String(recId).startsWith('local-');
   const [user, setUser] = useState(null); // ✅ diperbaiki: hapus const userId yang salah
   const [jobRecommendations, setJobRecommendations] = useState([]);
   const [skillRecommendations, setSkillRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [aiStatus, setAiStatus] = useState('');
+  const [refreshingAI, setRefreshingAI] = useState(false);
 
   // Fetch profile + recommendations
   useEffect(() => {
+    // Check for DISC+RIASEC results first (dari localStorage tanpa expiry - permanent)
+    if (typeof window !== 'undefined') {
+      const discRiasecResults = getWithExpiry('disc_riasec_results');
+      const assessmentType = getWithExpiry('assessment_type');
+      
+      if (discRiasecResults && assessmentType === 'DISC_RIASEC') {
+        try {
+          const results = discRiasecResults; // Sudah di-parse oleh getWithExpiry
+          // Create profile from DISC+RIASEC results
+          const discProfile = results.discProfile || {};
+          const riasecProfile = results.riasecProfile || {};
+          const recommendations = results.recommendations || [];
+          
+          // Format profile for personalized page
+          const formattedProfile = {
+            role_fit: `DISC: ${discProfile.primary || 'N/A'}/${discProfile.secondary || 'N/A'} | RIASEC: ${riasecProfile.primary || 'N/A'}/${riasecProfile.secondary || 'N/A'}`,
+            level: 'Menengah',
+            gap: `${recommendations.length} rekomendasi pekerjaan`,
+            strength: JSON.stringify({
+              archetype: `DISC ${discProfile.primary || ''}-${discProfile.secondary || ''}`,
+              topThree: [
+                discProfile.primary || 'D',
+                discProfile.secondary || 'I',
+                riasecProfile.primary || 'A'
+              ],
+              traits: {
+                ...discProfile.scores,
+                ...riasecProfile.scores
+              },
+              discProfile,
+              riasecProfile
+            }),
+            skill_gap: JSON.stringify([]),
+            disc_profile: discProfile,
+            riasec_profile: riasecProfile,
+            job_recommendations: recommendations
+          };
+          
+          setProfile(formattedProfile);
+          setUser({ name: 'User' });
+          // Store recommendations in the format expected by formatJobRecommendations
+          setJobRecommendations(recommendations);
+          setError('');
+          setLoading(false);
+          return;
+        } catch (e) {
+          logError('Error parsing DISC+RIASEC results:', e);
+        }
+      }
+    }
+    
     if (!recId) {
-      setError('rec_id tidak ditemukan');
+      // Jika recId masih null, coba resolve dari user_id via API
+      const userIdFromQuery = searchParams.get('id');
+      
+      if (userIdFromQuery && !userIdFromQuery.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        // id adalah user_id (bukan UUID), fetch personalized profile dari API
+        const fetchByUserId = async () => {
+          try {
+            setLoading(true);
+            const userPersonalizationsRes = await personalizedAPI.getByUserId(userIdFromQuery, 1, 1);
+            
+            if (userPersonalizationsRes?.data?.success && userPersonalizationsRes.data.data?.personalizations?.length > 0) {
+              // Ambil personalized profile terbaru
+              const latestPersonalized = userPersonalizationsRes.data.data.personalizations[0];
+              const resolvedRecId = latestPersonalized.rec_id || latestPersonalized.id;
+              
+              if (resolvedRecId) {
+                // Fetch full profile dengan rec_id yang ditemukan
+                const fullProfileRes = await personalizedAPI.getWithRecs(resolvedRecId);
+                if (fullProfileRes?.data?.success) {
+                  const profileData = fullProfileRes.data.data.personalized;
+                  const jobRecs = fullProfileRes.data.data.job_recommendations || [];
+                  const skillRecs = fullProfileRes.data.data.skill_recommendations || [];
+                  
+                  setProfile(profileData);
+                  setJobRecommendations(jobRecs);
+                  setSkillRecommendations(skillRecs);
+                  
+                  // Resolve user name
+                  const userId = profileData?.user_id;
+                  if (userId) {
+                    try {
+                      const userRes = await usersAPI.getById(userId);
+                      if (userRes.data?.success && userRes.data.data?.user) {
+                        const userObj = userRes.data.data.user;
+                        setUser({ ...userObj, name: userObj.name || userObj.email || 'User' });
+                      } else {
+                        setUser({ name: typeof userId === 'string' ? userId : 'User' });
+                      }
+                    } catch (userErr) {
+                      setUser({ name: typeof userId === 'string' ? userId : 'User' });
+                    }
+                  }
+                  
+                  setError('');
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+            
+            // Jika tidak ada personalized profile, cek assessment_cache
+            setError('Profil personalized tidak ditemukan. Silakan selesaikan assessment terlebih dahulu.');
+          } catch (apiErr) {
+            console.error('Error fetching personalized by user_id:', apiErr);
+            setError('rec_id tidak ditemukan. Pastikan datang dari Skillmatch atau sertakan ?rec_id=...');
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        fetchByUserId();
+        return;
+      }
+      
+      setError('rec_id tidak ditemukan. Pastikan datang dari Skillmatch atau sertakan ?rec_id=...');
       setLoading(false);
       return;
     }
@@ -30,61 +188,135 @@ export function usePersonalizedProfile() {
     const fetchAll = async () => {
       try {
         setLoading(true);
-
-        // 1. Fetch personalized profile
-        const profileRes = await personalizedAPI.getById(recId);
-        if (!profileRes.data.success) {
-          throw new Error('Gagal fetch profile');
+        
+        // Skip local mode - semua data harus dari API
+        if (isLocalRec) {
+          setError('rec_id lokal tidak didukung. Silakan gunakan rec_id dari API.');
+          setLoading(false);
+          return;
         }
-        const profileData = profileRes.data.data.personalized;
+
+        // 1. Fetch personalized profile + recommendations dari API (prefer bundled endpoint)
+        let profileData = null;
+        let jobRecs = [];
+        let skillRecs = [];
+        try {
+          const bundleRes = await personalizedAPI.getWithRecs(recId);
+          if (bundleRes.data?.success) {
+            profileData = bundleRes.data.data.personalized;
+            jobRecs = bundleRes.data.data.job_recommendations || [];
+            skillRecs = bundleRes.data.data.skill_recommendations || [];
+          }
+        } catch (bundleErr) {
+          // Silently ignore 404s for bundled endpoint - it's optional
+          if (bundleErr.response?.status !== 404) {
+            logWarning('Bundled recommendations endpoint failed:', bundleErr);
+          }
+          // fallback to separate calls below
+        }
+
+        if (!profileData) {
+          const profileRes = await personalizedAPI.getById(recId);
+          if (!profileRes.data.success) {
+            throw new Error('Gagal fetch profile');
+          }
+          profileData = profileRes.data.data.personalized;
+          
+          // ✅ Jika profileData tidak punya hard_skill_assessment, coba fetch dari assessment_cache via assessmentAPI
+          if (!profileData.hard_skill_assessment) {
+            try {
+              const assessmentRes = await assessmentAPI.getResults();
+              if (assessmentRes?.data?.success && assessmentRes.data.data?.hard_skill_assessment) {
+                profileData.hard_skill_assessment = assessmentRes.data.data.hard_skill_assessment;
+                profileData.recommended_role = assessmentRes.data.data.recommended_role || profileData.recommended_role;
+              }
+            } catch (assessmentErr) {
+              // Ignore - hard_skill_assessment is optional
+              logWarning('Could not fetch hard_skill_assessment from assessment API:', assessmentErr);
+            }
+          }
+        }
         setProfile(profileData);
 
-        // 2. Fetch user name berdasarkan user_id
+        // 2. Resolve nama pengguna secara robust
         const userId = profileData?.user_id;
         if (userId) {
-          try {
-            const userRes = await usersAPI.getById(userId);
-            if (userRes.data?.success && userRes.data.data?.user) {
-              setUser(userRes.data.data.user);
-            } else {
-              // fallback kalau user_id sudah berupa nama
-              setUser({ name: userId });
+          // Jika user_id adalah objek yang sudah berisi nama/id
+          if (typeof userId === 'object') {
+            const name = resolveUserName(userId);
+            setUser({ name, id: userId.id || userId.user_id || null });
+          } else {
+            try {
+              const userRes = await usersAPI.getById(userId);
+              if (userRes.data?.success && userRes.data.data?.user) {
+                const userObj = userRes.data.data.user;
+                const name = resolveUserName(userObj, userId);
+                setUser({ ...userObj, name });
+              } else {
+                // fallback kalau user_id sudah berupa nama string
+                const name = typeof userId === 'string' ? userId : 'Pengguna';
+                setUser({ name });
+              }
+            } catch (userErr) {
+              logWarning('Gagal fetch user detail, fallback ke user_id:', userErr);
+              const name = typeof userId === 'string' ? userId : 'Pengguna';
+              setUser({ name });
             }
-          } catch (userErr) {
-            console.warn('Gagal fetch user detail, fallback ke user_id:', userErr);
-            setUser({ name: userId });
           }
         } else {
-          setUser({ name: 'User Tidak Dikenal' });
+          setUser({ name: 'Pengguna' });
         }
 
-        // 3. Fetch job recommendations (rec_pekerjaan)
-        try {
-          const jobsRes = await recPekerjaanAPI.getByRecId(recId);
-          if (jobsRes.data.success) {
-            const jobs = jobsRes.data.data.recommendations || [];
-            setJobRecommendations(jobs);
+        // 3. Fetch job recommendations if not provided by bundle
+        if (jobRecs.length > 0) {
+          setJobRecommendations(jobRecs);
+        } else {
+          try {
+            const jobsRes = await recommendationsAPI.getJobRecommendations(recId);
+            // Handle various response structures
+            if (jobsRes.data?.success) {
+              const jobs = jobsRes.data.data?.recommendations || jobsRes.data.data?.data || jobsRes.data.recommendations || [];
+              setJobRecommendations(Array.isArray(jobs) ? jobs : []);
+            } else {
+              setJobRecommendations([]);
+            }
+          } catch (jobErr) {
+            // Silently handle 404s - recommendations might not exist yet
+            if (jobErr.response?.status !== 404) {
+              logWarning('Error fetching jobs:', jobErr);
+            }
+            setJobRecommendations([]);
           }
-        } catch (jobErr) {
-          console.warn('Error fetching jobs:', jobErr);
-          setJobRecommendations([]);
         }
 
-        // 4. Fetch skill recommendations (rec_skillup)
-        try {
-          const skillsRes = await recSkillupAPI.getByRecId(recId);
-          if (skillsRes.data.success) {
-            const skills = skillsRes.data.data.recommendations || [];
-            setSkillRecommendations(skills);
+        // 4. Fetch skill recommendations if not provided by bundle
+        if (skillRecs.length > 0) {
+          setSkillRecommendations(skillRecs);
+        } else {
+          try {
+            const skillsRes = await recommendationsAPI.getSkillRecommendations(recId);
+            // Handle various response structures
+            if (skillsRes.data?.success) {
+              const skills = skillsRes.data.data?.recommendations || skillsRes.data.data?.data || skillsRes.data.recommendations || [];
+              setSkillRecommendations(Array.isArray(skills) ? skills : []);
+            } else {
+              setSkillRecommendations([]);
+            }
+          } catch (skillErr) {
+            // Silently handle 404s - recommendations might not exist yet
+            if (skillErr.response?.status !== 404) {
+              logWarning('Error fetching skills:', skillErr);
+            }
+            setSkillRecommendations([]);
           }
-        } catch (skillErr) {
-          console.warn('Error fetching skills:', skillErr);
-          setSkillRecommendations([]);
         }
 
         setError('');
+
+        // 5. AI analysis polling removed - use refreshAIAnalysis instead
       } catch (err) {
-        console.error('Error in fetchAll:', err);
+        logError('Error in fetchAll:', err);
+        // No fallback to sessionStorage - data must come from API
         setError(err.message || 'Gagal load profile');
       } finally {
         setLoading(false);
@@ -92,7 +324,7 @@ export function usePersonalizedProfile() {
     };
 
     fetchAll();
-  }, [recId]);
+  }, [recId, isLocalRec, searchParams]);
 
   // ============================================
   // COMPUTED VALUES - Phase 1 (Logic-based)
@@ -108,8 +340,14 @@ export function usePersonalizedProfile() {
     // Top strengths
     strengths: profile ? parseStrengths(profile.strength) : [],
 
-    // Skill gaps dengan priority
-    skillGaps: profile ? parseSkillGaps(profile.skill_gap) : [],
+    // Skill gaps dengan priority (fallback synth jika kosong)
+    skillGaps: (() => {
+      if (!profile) return [];
+      const parsed = parseSkillGaps(profile.skill_gap);
+      if (parsed && parsed.length > 0) return parsed;
+      const strengthParsed = parseStrengths(profile.strength);
+      return synthesizeSkillGaps(strengthParsed);
+    })(),
 
     // Formatted job recommendations
     formattedJobs: formatJobRecommendations(jobRecommendations),
@@ -117,11 +355,230 @@ export function usePersonalizedProfile() {
     // Formatted skill recommendations
     formattedSkills: formatSkillRecommendations(skillRecommendations),
 
-    // AI analysis placeholder (null sekarang, akan di-populate oleh AI nanti)
-    aiInsight: null,
+    // AI analysis (filled from backend if available)
+    aiInsight: (() => {
+      if (!profile) return null;
+      return (
+        profile.ai_insight ||
+        profile.ai_summary ||
+        profile.ai_analysis ||
+        null
+      );
+    })(),
 
     // Next steps recommendation
     nextSteps: profile ? generateNextSteps(profile) : []
+  };
+
+  // Function untuk refresh AI analysis (dipisah dari langchain logic, langsung call endpoint)
+  const refreshAIAnalysis = async (analysisType = 'detailed') => {
+    // Validasi recId - coba resolve lagi jika null
+    let currentRecId = recId;
+    
+    // Jika recId masih null, coba resolve dari profile atau query params
+    if (!currentRecId) {
+      // PRIORITAS: rec_id > id (jika UUID)
+      // Cek dari profile yang sudah di-fetch - SELALU gunakan rec_id jika ada
+      if (profile?.rec_id) {
+        currentRecId = profile.rec_id;
+        console.log('✅ refreshAIAnalysis: Found rec_id dari profile:', currentRecId);
+      } else if (profile?.id) {
+        const idStr = String(profile.id);
+        // Jika profile.id adalah UUID (format personalized rec_id), gunakan sebagai rec_id
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(idStr)) {
+          currentRecId = idStr;
+          console.log('✅ refreshAIAnalysis: Found UUID id dari profile sebagai rec_id:', currentRecId);
+        } else if (idStr.length > 20) {
+          // Jika panjang, mungkin rec_id
+          currentRecId = idStr;
+          console.log('✅ refreshAIAnalysis: Found long id dari profile sebagai rec_id:', currentRecId);
+        }
+      }
+      // Cek dari query params
+      if (!currentRecId && searchParams.get('rec_id')) {
+        currentRecId = searchParams.get('rec_id');
+      }
+      if (!currentRecId && searchParams.get('id')) {
+        currentRecId = searchParams.get('id');
+      }
+      // No sessionStorage fallback - all data must come from API
+      
+      // Fallback: Coba resolve dari user_id yang sedang login (via API)
+      // Hanya jika profile.rec_id dan profile.id tidak ada
+      // Skip jika sudah ada error 400/401/403 (auth issues)
+      if (!currentRecId && !profile?.rec_id && !profile?.id) {
+        try {
+          const userId = useAuthStore.getState().getUserId();
+          if (userId && String(userId).length > 0) {
+            console.log('🔄 refreshAIAnalysis: Mencoba resolve recId dari user_id:', userId);
+            
+            // Skip API call if user is not authenticated
+            const isAuthenticated = useAuthStore.getState().isAuthenticated;
+            if (!isAuthenticated) {
+              console.warn('⚠️ refreshAIAnalysis: User tidak authenticated, skip getByUserId');
+            } else {
+              const userPersonalizationsRes = await personalizedAPI.getByUserId(userId, 1, 1);
+              
+              if (userPersonalizationsRes?.data?.success && userPersonalizationsRes.data.data?.personalizations?.length > 0) {
+                const latestPersonalized = userPersonalizationsRes.data.data.personalizations[0];
+                const resolvedRecId = latestPersonalized.rec_id || latestPersonalized.id;
+                if (resolvedRecId) {
+                  console.log('✅ refreshAIAnalysis: Found recId dari user_id:', resolvedRecId);
+                  currentRecId = resolvedRecId;
+                }
+              }
+            }
+          } else {
+            console.warn('⚠️ refreshAIAnalysis: user_id tidak tersedia untuk resolve recId');
+          }
+        } catch (apiErr) {
+          // Don't log error for auth-related errors (400, 401, 403)
+          const status = apiErr?.response?.status;
+          if (status && (status === 400 || status === 401 || status === 403)) {
+            console.warn('⚠️ refreshAIAnalysis: Auth error saat resolve recId, skip:', status);
+          } else {
+            console.warn('⚠️ refreshAIAnalysis: Gagal resolve recId dari user_id:', apiErr.message);
+          }
+        }
+      }
+      
+      // Coba ambil dari URL jika ada (terakhir)
+      if (!currentRecId && typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRecId = urlParams.get('rec_id') || urlParams.get('id');
+        if (urlRecId) {
+          console.log('✅ Found recId from URL:', urlRecId);
+          currentRecId = urlRecId;
+        }
+      }
+    }
+    
+    if (!currentRecId) {
+      // Debug: log semua kemungkinan field dari profile
+      const authState = useAuthStore.getState();
+      console.error('❌ refreshAIAnalysis: recId tidak ada setelah semua resolusi', { 
+        recId, 
+        profile: profile ? {
+          id: profile.id,
+          rec_id: profile.rec_id,
+          user_id: profile.user_id,
+          allKeys: Object.keys(profile || {}),
+          sample: JSON.stringify(profile).substring(0, 200)
+        } : null,
+        queryParams: { rec_id: searchParams.get('rec_id'), id: searchParams.get('id') },
+        loggedInUserId: authState.getUserId(),
+        isAuthenticated: authState.isAuthenticated,
+        hasProfile: !!authState.profile,
+        hasUser: !!authState.user
+      });
+      
+      // Don't show alert if user is not authenticated
+      const isAuthenticated = authState.isAuthenticated;
+      if (!isAuthenticated) {
+        console.warn('⚠️ refreshAIAnalysis: User tidak authenticated, tidak bisa refresh AI analysis');
+        return;
+      }
+      
+      logError('recId tidak ditemukan. Pastikan Anda sudah menyelesaikan assessment dan memiliki personalized profile.');
+      alert('Tidak dapat menemukan ID profil. Pastikan Anda sudah menyelesaikan assessment.');
+      return;
+    }
+    
+    if (refreshingAI) {
+      console.warn('refreshAIAnalysis: Already refreshing, skipping...');
+      return;
+    }
+    
+    try {
+      console.log('🔄 Starting AI analysis refresh...', { recId: currentRecId, analysisType });
+      setRefreshingAI(true);
+      setAiStatus('pending');
+      
+      // Call endpoint langsung (tidak perlu polling assessmentAPI, langsung dari personalized)
+      const response = await personalizedAPI.refreshAIAnalysis(currentRecId, analysisType);
+      
+      if (!response?.data?.success) {
+        throw new Error(response?.data?.error || 'Failed to trigger AI analysis');
+      }
+      
+      console.log('✅ AI analysis triggered:', response.data);
+      
+      // Poll untuk hasil - langsung fetch dari personalized endpoint
+      let attempts = 0;
+      const maxAttempts = 24; // 2 menit polling (24 x 5s)
+      const pollInterval = setInterval(async () => {
+        attempts += 1;
+        try {
+          // Fetch personalized profile langsung untuk dapat AI analysis
+          const profileRes = await personalizedAPI.getById(currentRecId);
+          
+          if (profileRes?.data?.success) {
+            const personalizedData = profileRes.data.data?.personalized || profileRes.data.data;
+            const aiAnalysis = personalizedData?.ai_analysis || personalizedData?.ai_insight;
+            
+            if (aiAnalysis && Object.keys(aiAnalysis).length > 0) {
+              console.log('✅ AI analysis completed, updating profile');
+              setProfile(prev => ({ ...(prev || {}), ai_insight: aiAnalysis }));
+              setAiStatus('completed');
+              clearInterval(pollInterval);
+              setRefreshingAI(false);
+              return;
+            }
+          }
+          
+          // Fallback: check status via assessment API juga
+          try {
+            const statusRes = await assessmentAPI.checkStatus();
+            const completed = statusRes?.data?.data?.is_completed;
+            const failed = statusRes?.data?.data?.is_failed;
+            const status = statusRes?.data?.data?.ai_status;
+            
+            if (status) setAiStatus(status);
+            
+            if (completed) {
+              const res = await assessmentAPI.getResults();
+              if (res.data?.success && res.data.data?.ai_analysis) {
+                setProfile(prev => ({ ...(prev || {}), ai_insight: res.data.data.ai_analysis }));
+                setAiStatus('completed');
+                clearInterval(pollInterval);
+                setRefreshingAI(false);
+                return;
+              }
+            } else if (failed || status === 'failed') {
+              setAiStatus('failed');
+              clearInterval(pollInterval);
+              setRefreshingAI(false);
+              return;
+            }
+          } catch (statusErr) {
+            // Ignore status check errors, continue polling
+            console.warn('Status check error (continuing):', statusErr);
+          }
+          
+          // Timeout handling
+          if (attempts >= maxAttempts) {
+            console.warn('⏱️ AI analysis polling timeout');
+            clearInterval(pollInterval);
+            setAiStatus('timeout');
+            setRefreshingAI(false);
+          }
+        } catch (pollErr) {
+          console.warn('Poll error (continuing):', pollErr);
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setAiStatus('error');
+            setRefreshingAI(false);
+          }
+        }
+      }, 5000);
+      
+    } catch (err) {
+      console.error('❌ Error refreshing AI analysis:', err);
+      logError('Error refreshing AI analysis:', err);
+      setAiStatus('error');
+      setRefreshingAI(false);
+    }
   };
 
   return {
@@ -130,6 +587,9 @@ export function usePersonalizedProfile() {
     recId,
     loading,
     error,
+    aiStatus,
+    refreshingAI,
+    refreshAIAnalysis, // ✅ fungsi untuk refresh AI analysis
     // Raw data
     jobRecommendations,
     skillRecommendations,
@@ -141,6 +601,22 @@ export function usePersonalizedProfile() {
 // ============================================
 // PHASE 1: LOGIC-BASED HELPERS
 // ============================================
+
+// Mengambil nama pengguna dari berbagai kemungkinan field
+function resolveUserName(userObjOrString, fallback) {
+  if (typeof userObjOrString === 'string') return userObjOrString;
+  if (!userObjOrString || typeof userObjOrString !== 'object') {
+    return typeof fallback === 'string' ? fallback : 'Pengguna';
+  }
+  const candidates = [
+    userObjOrString.name,
+    userObjOrString.full_name,
+    userObjOrString.nama,
+    userObjOrString.username,
+    typeof fallback === 'string' ? fallback : null
+  ].filter(Boolean);
+  return candidates[0] || 'Pengguna';
+}
 
 function extractRoleFit(roleFitStr) {
   if (!roleFitStr) return 0;
@@ -156,14 +632,14 @@ function buildMetrics(profile) {
       title: "Role Fit",
       value: `${roleFit}%`,
       icon: "Target",
-      color: "text-[#FF8C00]",
+      color: `text-[${COLORS.PRIMARY}]`,
       benchmark: roleFit >= 75 ? "Excellent" : roleFit >= 55 ? "Good" : "Building"
     },
     {
       title: "Level",
       value: profile.level || "Menengah",
       icon: "TrendingUp",
-      color: "text-[#E4B200]"
+      color: `text-[${COLORS.ACCENT}]`
     },
     {
       title: "Skill Gaps",
@@ -192,7 +668,7 @@ function parseSkillGaps(skillGapStr) {
       }))
       .sort((a, b) => (b.priority || 0) - (a.priority || 0));
   } catch (e) {
-    console.error('Error parsing skill gaps:', e);
+    logError('Error parsing skill gaps:', e);
     return [];
   }
 }
@@ -207,7 +683,7 @@ function parseStrengths(strengthStr) {
       traits: strength.traits || {}
     };
   } catch (e) {
-    console.error('Error parsing strengths:', e);
+    logError('Error parsing strengths:', e);
     return {
       archetype: "The Explorer",
       topThree: [],
@@ -228,6 +704,21 @@ function getPriorityLabel(priority) {
 }
 
 function formatJobRecommendations(jobs) {
+  // Handle DISC+RIASEC format
+  if (jobs.length > 0 && jobs[0].job && typeof jobs[0].job === 'string') {
+    return jobs.map(job => ({
+      id: job.job || `job-${Math.random()}`,
+      role: job.job,
+      bidang: 'IT',
+      description: job.desc || '',
+      requirements: '',
+      link: null,
+      match: job.score || 0,
+      badge: job.label || getBadgeFromMatch(job.score || 0)
+    }));
+  }
+  
+  // Handle legacy format
   return jobs.map(job => ({
     id: job.pekerjaan?.pekerjaan_id,
     role: job.pekerjaan?.nama_pekerjaan,
@@ -316,31 +807,92 @@ function generateNextSteps(profile) {
   return steps;
 }
 
-// ============================================
-// PHASE 2 PLACEHOLDER (untuk AI integration nanti)
-// ============================================
+// Generate synthetic skill gaps when backend has no data
+function synthesizeSkillGaps(strengthsObj) {
+  const top = strengthsObj?.topThree || [];
+  const traits = strengthsObj?.traits || {};
+  const candidates = [
+    { name: 'Leadership Communication', trait: top[0] || 'Communication', priority: 4 },
+    { name: 'Problem Solving', trait: top[1] || 'Analysis', priority: 3 },
+    { name: 'Stakeholder Management', trait: top[2] || 'Collaboration', priority: 3 },
+  ];
+  return candidates.map(c => ({
+    ...c,
+    priorityLabel: getPriorityLabel(c.priority)
+  }));
+}
 
 /**
- * Placeholder untuk AI analysis
- * Nanti akan di-call oleh separate AI hook
- * Misalnya: useAIAnalysis(profile, jobRecommendations, skillRecommendations)
+ * AI Analysis Hook dengan RAG + Gemini + LangChain
+ * 
+ * Backend menggunakan:
+ * - LangChain untuk orchestration AI calls
+ * - Google Gemini API untuk LLM generation
+ * - RAG (Retrieval Augmented Generation) dengan vector embeddings:
+ *   1. Query di-embed menggunakan Gemini embeddings
+ *   2. Vector similarity search untuk retrieve relevant documents
+ *   3. Top 5 documents digunakan sebagai context untuk prompt
+ *   4. Gemini generate analysis dengan RAG context
+ * 
+ * Caching:
+ * - Smart caching dengan 85% similarity threshold
+ * - Similar profiles akan reuse cached analysis
+ * 
+ * @param {string} personalizedId - ID dari personalized profile (rec_id)
+ * @param {boolean} autoFetch - Auto fetch saat mount (default: false)
+ * @param {string} analysisType - 'summary' untuk dashboard (ringkas) atau 'detailed' untuk AnalisisAI (mendalam, default: 'summary')
+ * @returns {Object} { aiInsight, aiLoading, aiError, generateInsight, refreshAnalysis }
  */
-export function useAIAnalysis(profile, jobRecommendations, skillRecommendations) {
+export function useAIAnalysis(personalizedId, autoFetch = false, analysisType = 'summary') {
   const [aiInsight, setAiInsight] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
-  // TODO: Implement AI call ke Claude/GPT
-  // const generateInsight = async () => {
-  //   const response = await callAI({
-  //     profile,
-  //     jobRecommendations,
-  //     skillRecommendations
-  //   });
-  //   setAiInsight(response);
-  // };
+  const generateInsight = useCallback(async (forceRefresh = false) => {
+    if (!personalizedId) {
+      setAiError('Personalized ID is required');
+      return null;
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      const response = await personalizedAPI.refreshAIAnalysis(personalizedId, analysisType);
+      
+      if (response?.data?.success) {
+        const analysis = response.data.data?.ai_analysis || 
+                        response.data.data?.analysis ||
+                        response.data.data;
+        setAiInsight(analysis);
+        return analysis;
+      } else {
+        throw new Error(response?.data?.error || 'Failed to generate AI analysis');
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.error || 
+                          error?.response?.data?.message ||
+                          error?.message || 
+                          'Gagal generate AI analysis. Silakan coba lagi.';
+      setAiError(errorMessage);
+      console.error('AI Analysis error:', error);
+      throw error;
+    } finally {
+      setAiLoading(false);
+    }
+  }, [personalizedId, analysisType]);
+
+  useEffect(() => {
+    if (autoFetch && personalizedId && !aiInsight && !aiLoading) {
+      generateInsight();
+    }
+  }, [autoFetch, personalizedId, aiInsight, aiLoading, generateInsight]);
 
   return {
     aiInsight,
-    aiLoading
+    aiLoading,
+    aiError,
+    generateInsight,
+    refreshAnalysis: () => generateInsight(true),
   };
 }
