@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Check, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { quests } from "../../../lib/quest/questQuestion";
 
 // --- THEME ---
 const THEMES = [
@@ -39,44 +40,22 @@ const MiniCharacter = ({ emotion }) => {
   );
 };
 
-// --- SAMPLE QUESTIONS ---
-const SAMPLE_QUESTIONS = [
-  {
-    id: "q1",
-    title: "Selamat Datang di Aruna Quest 🌅",
-    text: "Apa makna dari perjalanan ini menurutmu?",
-    choices: [
-      { id: "c1", text: "Menguji pengetahuan secara interaktif" },
-      { id: "c2", text: "Sebuah permainan santai" },
-      { id: "c3", text: "Tes monoton biasa" },
-    ],
-    correctChoiceId: "c1",
-    timeLimitSec: 45,
-  },
-  {
-    id: "q2",
-    title: "Flow Pengalaman",
-    text: "Apa elemen utama agar UX terasa mengalir?",
-    choices: [
-      { id: "c1", text: "Progress & umpan balik instan" },
-      { id: "c2", text: "Banyak menu dan langkah" },
-      { id: "c3", text: "Tanpa arah dan tidak jelas" },
-    ],
-    correctChoiceId: "c1",
-    timeLimitSec: 30,
-  },
-  {
-    id: "q3",
-    title: "Memori Data",
-    text: "Bagaimana sistem bisa mengingat progres pengguna?",
-    choices: [
-      { id: "c1", text: "Dengan localStorage / IndexedDB" },
-      { id: "c2", text: "Menghapus semua setiap reload" },
-      { id: "c3", text: "Tidak perlu menyimpan apa pun" },
-    ],
-    correctChoiceId: "c1",
-  },
-];
+// --- DERIVE SIMPLE QUIZ FROM QUESTS' START SCENES ---
+function deriveQuestionsFromQuests() {
+  try {
+    const list = Object.values(quests || {});
+    return list.map((q) => {
+      const start = q.scenarios?.[q.startScenarioId];
+      const title = q.title || "Quest";
+      const text = start?.narrative || q.description || "";
+      const choices = (start?.choices || []).map((c) => ({ id: c.id, text: c.text }));
+      const correctChoiceId = choices[0]?.id; // placeholder to fit current quiz logic
+      return { id: q.id, title, text, choices, correctChoiceId };
+    }).filter((x) => x && x.choices && x.choices.length > 0);
+  } catch {
+    return [];
+  }
+}
 
 const STORAGE_KEY = "arunika_quest_v2";
 
@@ -130,36 +109,38 @@ function ProgressOrb({ progress }) {
 }
 
 // --- MAIN QUEST COMPONENT ---
-export default function QuestPage({ questions = SAMPLE_QUESTIONS }) {
+export default function QuestPage({ questions }) {
+  const derivedQuestions = deriveQuestionsFromQuests();
+  const qList = Array.isArray(questions) && questions.length > 0 ? questions : derivedQuestions;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [showResults, setShowResults] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(questions[0]?.timeLimitSec ?? null);
+  const [timeLeft, setTimeLeft] = useState(qList[0]?.timeLimitSec ?? null);
   const [emotion, setEmotion] = useState("idle");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [analysis, setAnalysis] = useState(null);
 
-  const current = questions[currentIndex];
+  const current = qList[currentIndex];
   const theme = THEMES[currentIndex % THEMES.length];
 
   // --- LOAD SAVED STATE ---
   useEffect(() => {
     const saved = loadProgress();
-    if (saved && saved.questionsLength === questions.length) {
+    if (saved && saved.questionsLength === qList.length) {
       setCurrentIndex(saved.currentIndex);
       setAnswers(saved.answers);
       setShowResults(saved.showResults);
     }
-  }, [questions.length]);
+  }, [qList.length]);
 
   // --- AUTO SAVE ---
   useEffect(() => {
-    saveProgress({ currentIndex, answers, showResults, questionsLength: questions.length });
-  }, [currentIndex, answers, showResults, questions.length]);
+    saveProgress({ currentIndex, answers, showResults, questionsLength: qList.length });
+  }, [currentIndex, answers, showResults, qList.length]);
 
   // --- TIMER ---
   useEffect(() => {
-    const q = questions[currentIndex];
+    const q = qList[currentIndex];
     if (!q?.timeLimitSec) return setTimeLeft(null);
     setTimeLeft(q.timeLimitSec);
     const id = setInterval(() => {
@@ -172,7 +153,7 @@ export default function QuestPage({ questions = SAMPLE_QUESTIONS }) {
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [currentIndex]);
+  }, [currentIndex, qList]);
 
   const playSound = (file) => {
     if (!soundEnabled) return;
@@ -193,17 +174,17 @@ export default function QuestPage({ questions = SAMPLE_QUESTIONS }) {
   );
 
   const handleNext = useCallback(() => {
-    if (currentIndex + 1 >= questions.length) {
+    if (currentIndex + 1 >= qList.length) {
       setShowResults(true);
       generateAnalysis(); // 🔥 Buat analisis saat semua selesai
       return;
     }
     setCurrentIndex((i) => i + 1);
-  }, [currentIndex, questions.length, answers]);
+  }, [currentIndex, qList.length, answers]);
 
   const handlePrev = useCallback(() => setCurrentIndex((i) => Math.max(0, i - 1)), []);
 
-  const score = questions.reduce(
+  const score = qList.reduce(
     (acc, q) => (answers[q.id] === q.correctChoiceId ? acc + 1 : acc),
     0
   );
@@ -256,9 +237,9 @@ export default function QuestPage({ questions = SAMPLE_QUESTIONS }) {
             >
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button>
-            <ProgressOrb progress={((currentIndex + (showResults ? 1 : 0)) / questions.length) * 100} />
+            <ProgressOrb progress={((currentIndex + (showResults ? 1 : 0)) / qList.length) * 100} />
             <div className="text-xs text-slate-500">
-              {currentIndex + 1}/{questions.length}
+              {currentIndex + 1}/{qList.length}
             </div>
           </div>
         </header>
@@ -337,7 +318,7 @@ export default function QuestPage({ questions = SAMPLE_QUESTIONS }) {
                     animate={{ scale: 1 }}
                   >
                     <div className="text-sm text-slate-400">Score</div>
-                    <div className="text-3xl font-bold">{score} / {questions.length}</div>
+                    <div className="text-3xl font-bold">{score} / {qList.length}</div>
                   </motion.div>
 
                   {analysis && (
