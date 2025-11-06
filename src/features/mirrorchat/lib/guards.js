@@ -1,5 +1,5 @@
 import { MirrorChatAPI } from './ApiAdapter.js';
-import { assessmentAPI, personalizedAPI, usersAPI } from '@/lib/api';
+import { assessmentAPI, personalizedAPI, usersAPI } from '@/lib/api.js';
 
 const cache = new Map();
 
@@ -119,7 +119,7 @@ function parseSkillGaps(skillGapsData) {
  * @param {string} userId - User ID
  * @returns {Promise<object>} - Personalized data dengan user info dan computed values
  */
-async function fetchPersonalizedData(userId) {
+export async function fetchPersonalizedData(userId) {
   // Return object kosong jika userId tidak valid
   if (!userId || userId === "anon") {
     return {
@@ -139,10 +139,14 @@ async function fetchPersonalizedData(userId) {
         userInfo = userRes.data.data.user;
       }
     } catch (err) {
-      if (process.env.NODE_ENV === 'development') {
-        const errorMsg = err?.response?.data?.error?.message || err?.message || "Unknown error";
+      // Error sudah di-handle oleh axios interceptor di api.js
+      // Jangan throw error lagi, continue tanpa userInfo
+      // Only log meaningful errors - skip empty error objects
+      const errorMsg = err?.response?.data?.error?.message || err?.message;
+      if (errorMsg && errorMsg !== "Unknown error" && process.env.NODE_ENV === 'development') {
         console.warn("[Personalized Data] Could not fetch user info:", errorMsg);
       }
+      // Continue without userInfo - will try to get from personalized data later
     }
 
     // 2. Fetch personalized profile dengan recommendations
@@ -170,6 +174,19 @@ async function fetchPersonalizedData(userId) {
                 skillRecommendations: skillRecs,
               };
               
+              // Jika userInfo belum ada, coba ambil dari personalized data
+              // (beberapa API mungkin sudah include user info di response)
+              if (!userInfo && personalized.user_id) {
+                // Try to extract user info from personalized data if available
+                // This is a fallback if userInfo API call failed
+                userInfo = {
+                  id: personalized.user_id,
+                  email: typeof personalized.user_id === 'string' && personalized.user_id.includes('@') 
+                    ? personalized.user_id 
+                    : null,
+                };
+              }
+              
               // Compute values seperti di usePersonalizedProfile
               const roleFitData = personalized.role_fit || {};
               const aiInsight = personalized.ai_insight || {};
@@ -190,42 +207,70 @@ async function fetchPersonalizedData(userId) {
               };
             }
           } catch (innerErr) {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn("[Personalized Data] Could not fetch full profile:", innerErr?.message || "Unknown error");
+            // Error sudah di-handle oleh axios interceptor di api.js
+            // Jangan throw error lagi, continue tanpa full profile
+            const innerErrorMsg = innerErr?.response?.data?.error?.message || innerErr?.message;
+            if (innerErrorMsg && innerErrorMsg !== "Unknown error" && process.env.NODE_ENV === 'development') {
+              console.warn("[Personalized Data] Could not fetch full profile:", innerErrorMsg);
             }
           }
         }
       }
     } catch (err) {
-      if (process.env.NODE_ENV === 'development') {
-        const errorMsg = err?.response?.data?.error?.message || err?.message || "Unknown error";
+      // Error sudah di-handle oleh axios interceptor di api.js
+      // Jangan throw error lagi, continue tanpa personalized data
+      const errorMsg = err?.response?.data?.error?.message || err?.message;
+      if (errorMsg && errorMsg !== "Unknown error" && process.env.NODE_ENV === 'development') {
         console.warn("[Personalized Data] Could not fetch personalized:", errorMsg);
       }
+      // Continue without personalized data
     }
 
-    // 3. Fetch assessment results (fallback)
+    // 3. Fetch assessment_cache data dari personalizedAPI (jika ada di personalized data)
+    // assessment_cache biasanya sudah termasuk dalam personalized data atau bisa diambil via personalizedAPI
+    // Data assessment_cache (DISC, RIASEC, AI analysis) sudah terintegrasi dengan personalized profile
     let assessmentData = null;
-    try {
-      const assessmentRes = await assessmentAPI.getResults();
-      if (assessmentRes?.data?.success && assessmentRes.data.data) {
-        assessmentData = assessmentRes.data.data;
-      }
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') {
-        const errorMsg = err?.response?.data?.error?.message || err?.message || "Unknown error";
-        console.warn("[Personalized Data] Could not fetch assessment:", errorMsg);
+    
+    // Jika personalized data sudah ada, coba extract assessment_cache data dari sana
+    if (personalizedData?.personalized) {
+      const personalized = personalizedData.personalized;
+      // Assessment cache data biasanya ada di personalized profile sebagai:
+      // - disc_profile, riasec_profile (dari assessment_cache)
+      // - ai_insight/ai_analysis (dari assessment_cache.ai_analysis)
+      assessmentData = {
+        disc_profile: personalized.disc_profile || null,
+        riasec_profile: personalized.riasec_profile || null,
+        ai_analysis: personalized.ai_insight || personalized.ai_analysis || null,
+      };
+    } else {
+      // Fallback: coba fetch dari assessmentAPI jika personalized data tidak ada
+      // Tapi ini hanya untuk backward compatibility, karena mirror chat fokus ke personalizedAPI
+      try {
+        const assessmentRes = await assessmentAPI.getResults();
+        if (assessmentRes?.data?.success && assessmentRes.data.data) {
+          assessmentData = assessmentRes.data.data;
+        }
+      } catch (err) {
+        // Error sudah di-handle oleh axios interceptor di api.js
+        // Jangan throw error lagi, continue tanpa assessment data
+        const errorMsg = err?.response?.data?.error?.message || err?.message;
+        if (errorMsg && errorMsg !== "Unknown error" && process.env.NODE_ENV === 'development') {
+          console.warn("[Personalized Data] Could not fetch assessment_cache:", errorMsg);
+        }
+        // Continue without assessment data
       }
     }
 
     return {
       userInfo,
       personalizedData,
-      assessmentData,
+      assessmentData, // Assessment cache data dari personalizedAPI (prioritas utama)
       computedValues, // Computed values untuk memudahkan AI memahami data user
     };
   } catch (error) {
-    const errorMsg = error?.response?.data?.error?.message || error?.message || "Unknown error";
-    if (process.env.NODE_ENV === 'development') {
+    // Only log meaningful errors - skip empty error objects
+    const errorMsg = error?.response?.data?.error?.message || error?.message;
+    if (errorMsg && errorMsg !== "Unknown error" && process.env.NODE_ENV === 'development') {
       console.error("[Personalized Data] Unexpected error:", errorMsg);
     }
     return {
@@ -243,45 +288,77 @@ async function fetchPersonalizedData(userId) {
  * @param {string} message - Pesan dari user
  * @param {object} profile - Profile user (optional)
  * @param {boolean} isFirstMessage - Apakah ini pesan pertama kali
+ * @param {object} cachedPersonalizedData - Optional: cached personalized data dari store untuk menghindari duplicate fetch
  * @returns {Promise<string>} - Response dari AI yang dipersonalisasi
  */
-export async function aiReflectionGuard(userId, message, profile = {}, isFirstMessage = false) {
+export async function aiReflectionGuard(userId, message, profile = {}, isFirstMessage = false, cachedPersonalizedData = null) {
   try {
-    // SELALU fetch personalized data untuk setiap pesan (bukan hanya first message)
+    // Gunakan cached data jika tersedia, jika tidak fetch baru
     // Karena mirror chat fokus ke perkembangan karir berdasarkan role fit dari personalized
-    let personalizedContext = null;
-    try {
-      personalizedContext = await fetchPersonalizedData(userId);
-      // Ensure personalizedContext is never null (always an object)
-      if (!personalizedContext) {
+    let personalizedContext = cachedPersonalizedData;
+    
+    // Jika tidak ada cached data, fetch baru
+    if (!personalizedContext || !personalizedContext.personalizedData) {
+      try {
+        personalizedContext = await fetchPersonalizedData(userId);
+        // Ensure personalizedContext is never null (always an object)
+        if (!personalizedContext) {
+          personalizedContext = {
+            userInfo: null,
+            personalizedData: null,
+            assessmentData: null,
+            computedValues: null,
+          };
+        }
+      } catch (err) {
+        // Fallback jika fetchPersonalizedData throw error (shouldn't happen, but just in case)
+        const errorMsg = err?.message;
+        if (errorMsg && errorMsg !== "Unknown error" && process.env.NODE_ENV === 'development') {
+          console.warn("[AI Reflection Guard] Error fetching personalized data:", errorMsg);
+        }
         personalizedContext = {
           userInfo: null,
           personalizedData: null,
           assessmentData: null,
+          computedValues: null,
         };
       }
-    } catch (err) {
-      // Fallback jika fetchPersonalizedData throw error (shouldn't happen, but just in case)
-      console.warn("[AI Reflection Guard] Error fetching personalized data:", err?.message || "Unknown error");
-      personalizedContext = {
-        userInfo: null,
-        personalizedData: null,
-        assessmentData: null,
-      };
     }
 
-    // Fetch assessment results untuk mendapatkan role fit context
-    // Prioritas: gunakan data dari personalized jika ada, baru assessment
+    // Build role fit context HANYA dari personalizedAPI (tidak ada fallback ke assessment)
+    // Data sudah di-fetch dari personalizedAPI via fetchPersonalizedData
     let roleFitContext = null;
     
-    // Coba ambil dari personalized data dulu (jika ada)
-    if (personalizedContext?.personalizedData?.personalized) {
+    // Prioritas 1: Gunakan computedValues dari personalizedAPI (sudah di-compute di fetchPersonalizedData)
+    if (personalizedContext?.computedValues) {
+      const computed = personalizedContext.computedValues;
+      roleFitContext = {
+        roleFit: computed.roleFit || null,
+        competenceLevel: computed.competenceLevel || null,
+        recommendedRole: computed.recommendedRole || null,
+        personalitySummary: computed.personalitySummary || null,
+        detailPeran: computed.detailPeran || null,
+        potensiKarir: computed.potensiKarir || null,
+        topStrengths: computed.strengths || null,
+        developmentAreas: computed.skillGaps || null,
+        nextSteps: computed.nextSteps || null,
+      };
+      
+      // Tambahkan discProfile dan riasecProfile dari personalized data jika ada
+      if (personalizedContext?.personalizedData?.personalized) {
+        const personalized = personalizedContext.personalizedData.personalized;
+        roleFitContext.discProfile = personalized.disc_profile || null;
+        roleFitContext.riasecProfile = personalized.riasec_profile || null;
+      }
+    }
+    // Prioritas 2: Jika computedValues tidak ada, ambil langsung dari personalized data
+    else if (personalizedContext?.personalizedData?.personalized) {
       const personalized = personalizedContext.personalizedData.personalized;
       const roleFitData = personalized.role_fit || {};
       const aiInsight = personalized.ai_insight || {};
       
       roleFitContext = {
-        roleFit: roleFitData?.fit || roleFitData?.score || null,
+        roleFit: extractRoleFit(roleFitData),
         competenceLevel: personalized.competence_level || null,
         discProfile: personalized.disc_profile || null,
         riasecProfile: personalized.riasec_profile || null,
@@ -289,45 +366,13 @@ export async function aiReflectionGuard(userId, message, profile = {}, isFirstMe
         personalitySummary: aiInsight?.personality_summary || aiInsight?.summary || null,
         detailPeran: aiInsight?.detail_peran || null,
         potensiKarir: aiInsight?.potensi_karir || null,
-        topStrengths: personalized.top_strengths || null,
-        developmentAreas: personalized.skill_gaps || null,
+        topStrengths: parseStrengths(personalized.top_strengths),
+        developmentAreas: parseSkillGaps(personalized.skill_gaps),
+        nextSteps: aiInsight?.next_steps || null,
       };
     }
     
-    // Jika tidak ada dari personalized, coba ambil dari assessment
-    if (!roleFitContext || !roleFitContext.roleFit) {
-      try {
-        const assessmentRes = await assessmentAPI.getResults();
-        
-        if (assessmentRes?.data?.success && assessmentRes.data.data) {
-          const assessmentData = assessmentRes.data.data;
-          const aiAnalysis = assessmentData.ai_analysis;
-          
-          // Build role fit context dari assessment results
-          if (aiAnalysis) {
-            roleFitContext = {
-              roleFit: aiAnalysis.role_fit || null,
-              competenceLevel: aiAnalysis.competence_level || null,
-              discProfile: assessmentData.disc_profile || null,
-              riasecProfile: assessmentData.riasec_profile || null,
-              recommendedRole: aiAnalysis.recommended_role || assessmentData.recommended_job_type || null,
-              personalitySummary: aiAnalysis.personality_summary || null,
-              detailPeran: aiAnalysis.detail_peran || null,
-              potensiKarir: aiAnalysis.potensi_karir || null,
-              topStrengths: aiAnalysis.top_strengths || null,
-              developmentAreas: aiAnalysis.development_areas || null,
-            };
-          }
-        }
-      } catch (err) {
-        // Silently continue - assessment data tidak selalu ada
-        // Error sudah di-handle oleh axios interceptor, kita skip saja
-        if (process.env.NODE_ENV === 'development') {
-          console.warn("[AI Reflection Guard] Could not fetch assessment data:", err?.message || "Unknown error");
-        }
-        // Continue tanpa role fit context jika fetch gagal
-      }
-    }
+    // TIDAK ADA FALLBACK KE ASSESSMENT API - semua data harus dari personalizedAPI
 
     // Panggil MirrorChatAPI dengan role fit context dan personalized context
     // SELALU kirim personalizedContext karena mirror chat fokus ke perkembangan karir berdasarkan personalized data

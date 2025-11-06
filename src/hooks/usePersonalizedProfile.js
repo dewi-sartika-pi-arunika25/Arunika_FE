@@ -64,7 +64,7 @@ export function usePersonalizedProfile() {
 
   // Fetch profile + recommendations
   useEffect(() => {
-    // Check for DISC+RIASEC results first (dari localStorage dengan expiry 24h)
+    // Check for DISC+RIASEC results first (dari localStorage tanpa expiry - permanent)
     if (typeof window !== 'undefined') {
       const discRiasecResults = getWithExpiry('disc_riasec_results');
       const assessmentType = getWithExpiry('assessment_type');
@@ -221,6 +221,20 @@ export function usePersonalizedProfile() {
             throw new Error('Gagal fetch profile');
           }
           profileData = profileRes.data.data.personalized;
+          
+          // ✅ Jika profileData tidak punya hard_skill_assessment, coba fetch dari assessment_cache via assessmentAPI
+          if (!profileData.hard_skill_assessment) {
+            try {
+              const assessmentRes = await assessmentAPI.getResults();
+              if (assessmentRes?.data?.success && assessmentRes.data.data?.hard_skill_assessment) {
+                profileData.hard_skill_assessment = assessmentRes.data.data.hard_skill_assessment;
+                profileData.recommended_role = assessmentRes.data.data.recommended_role || profileData.recommended_role;
+              }
+            } catch (assessmentErr) {
+              // Ignore - hard_skill_assessment is optional
+              logWarning('Could not fetch hard_skill_assessment from assessment API:', assessmentErr);
+            }
+          }
         }
         setProfile(profileData);
 
@@ -310,7 +324,7 @@ export function usePersonalizedProfile() {
     };
 
     fetchAll();
-  }, [recId, isLocalRec]);
+  }, [recId, isLocalRec, searchParams]);
 
   // ============================================
   // COMPUTED VALUES - Phase 1 (Logic-based)

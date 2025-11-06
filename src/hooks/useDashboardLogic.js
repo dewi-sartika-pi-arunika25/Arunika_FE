@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { useAuthStore } from "@/lib/store/auth";
 import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
 import { getRoleFitWithWorkStyle } from "@/lib/utils/roleFitMapping";
-import { getAllSkillGapsForRole } from "@/lib/utils/roleSkillMapping";
+import { getAllSkillGapsForRole, separateSkillsByCategory, categorizeSkill } from "@/lib/utils/roleSkillMapping";
 import { getCompetenceLevel, getCompetenceLevelFromScores } from "@/lib/utils/competenceLevelMapping";
 import { buildGeneralPersonalityDescription, getTopStrengthsFromRadar } from "@/lib/utils/dimensionDescriptions";
 
@@ -104,44 +104,113 @@ export function useDashboardLogic() {
     }));
   }, [strengths, profile]);
 
-  // Skill gap data
+  // Skill gap data - HANYA HARD SKILL untuk dashboard
+  // Priority: hard skill assessment dari backend > hard skill assessment dari localStorage > skillGaps dari profile (filtered) > role-based mapping (filtered)
   const skillGapData = useMemo(() => {
-    if (skillGaps && skillGaps.length > 0) {
-      return skillGaps.map((g) => {
-        const gapPercent = g.gapPercent ?? (g.priority ? (6 - g.priority) * 15 : 40);
-        const currentPercent = Math.max(20, 100 - gapPercent - Math.floor(Math.random() * 20));
-        const skillName = g.name || g.skill || "Skill";
-        return {
-          skill: truncateSkillName(skillName, 18),
-          skillFull: skillName,
-          gap: currentPercent,
-          target: 100 - gapPercent,
-        };
-      }).slice(0, 5);
+    let allSkills = [];
+    
+    // Priority 1: Hard skill assessment dari backend atau localStorage
+    let hardSkillAssessment = profile?.hard_skill_assessment || 
+                               profile?.assessment_results?.hardSkillAssessment ||
+                               null;
+    
+    // Check localStorage if not in profile
+    if (!hardSkillAssessment && typeof window !== 'undefined') {
+      try {
+        const cached = getWithExpiry('disc_riasec_results');
+        hardSkillAssessment = cached?.hardSkillAssessment || null;
+      } catch (e) {
+        // Ignore if getWithExpiry fails
+      }
     }
     
-    if (recommendedRole && recommendedRole !== "Belum Tersedia") {
+    if (hardSkillAssessment && Array.isArray(hardSkillAssessment) && hardSkillAssessment.length > 0) {
+      // Filter hanya hard skill (double-check)
+      const hardSkillsFromAssessment = hardSkillAssessment
+        .filter(skill => {
+          const category = skill.category || categorizeSkill(skill.skill || skill.name, skill.description || "");
+          return category === "hard";
+        })
+        .map((skill) => {
+          const skillName = skill.skill || skill.name || "Skill";
+          const userLevel = skill.userLevel || 0; // 0-5
+          const requiredLevel = skill.requiredLevel || 3; // 1-5
+          const gap = skill.gap || Math.max(0, requiredLevel - userLevel);
+          
+          // Convert level (0-5) ke persentase (0-100)
+          const currentPercent = (userLevel / 5) * 100;
+          const targetPercent = (requiredLevel / 5) * 100;
+          
+          return {
+            skill: truncateSkillName(skillName, 18),
+            skillFull: skillName,
+            gap: currentPercent,
+            target: targetPercent,
+            category: "hard", // Force hard skill
+            priority: requiredLevel,
+            description: skill.description || "",
+            gapLevel: gap,
+          };
+        });
+      
+      allSkills = hardSkillsFromAssessment;
+    }
+    // Priority 2: Skill gaps dari profile (FILTER HARD SKILL ONLY)
+    else if (skillGaps && skillGaps.length > 0) {
+      allSkills = skillGaps
+        .filter(g => {
+          const category = g.category || categorizeSkill(g.name || g.skill, g.description || "");
+          return category === "hard"; // ✅ HANYA HARD SKILL
+        })
+        .map((g) => {
+          const gapPercent = g.gapPercent ?? (g.priority ? (6 - g.priority) * 15 : 40);
+          const currentPercent = Math.max(20, 100 - gapPercent - Math.floor(Math.random() * 20));
+          const skillName = g.name || g.skill || "Skill";
+          return {
+            skill: truncateSkillName(skillName, 18),
+            skillFull: skillName,
+            gap: currentPercent,
+            target: 100 - gapPercent,
+            category: "hard", // Force hard skill
+            priority: g.priority,
+            description: g.description,
+          };
+        });
+    }
+    // Priority 3: Role-based mapping (FILTER HARD SKILL ONLY)
+    else if (recommendedRole && recommendedRole !== "Belum Tersedia") {
       const roleSkills = getAllSkillGapsForRole(recommendedRole);
-      return roleSkills.slice(0, 5).map((skill, idx) => {
-        const gapPercent = skill.priority === 5 ? 60 : skill.priority === 4 ? 50 : 40;
-        const currentPercent = Math.max(30, 100 - gapPercent - (idx * 5));
-        const skillName = skill.skill || "Skill";
-        return {
-          skill: truncateSkillName(skillName, 18),
-          skillFull: skillName,
-          gap: currentPercent,
-          target: Math.min(100, currentPercent + gapPercent),
-        };
-      });
+      allSkills = roleSkills
+        .filter(skill => skill.category === "hard") // ✅ HANYA HARD SKILL
+        .map((skill, idx) => {
+          const gapPercent = skill.priority === 5 ? 60 : skill.priority === 4 ? 50 : 40;
+          const currentPercent = Math.max(30, 100 - gapPercent - (idx * 5));
+          const skillName = skill.skill || "Skill";
+          return {
+            skill: truncateSkillName(skillName, 18),
+            skillFull: skillName,
+            gap: currentPercent,
+            target: Math.min(100, currentPercent + gapPercent),
+            category: "hard", // Force hard skill
+            priority: skill.priority,
+            description: skill.description,
+          };
+        });
+    } else {
+      // Fallback: generate dummy data untuk demo (HARD SKILL ONLY)
+      allSkills = [
+        { skill: "Technical Skills", skillFull: "Technical Skills", gap: 45, target: 80, category: "hard", priority: 4 },
+      ];
     }
     
-    // Fallback: generate dummy data untuk demo
-    return [
-      { skill: "Technical Skills", skillFull: "Technical Skills", gap: 45, target: 80 },
-      { skill: "Communication", skillFull: "Communication", gap: 50, target: 85 },
-      { skill: "Problem Solving", skillFull: "Problem Solving", gap: 40, target: 75 },
-    ];
-  }, [skillGaps, recommendedRole]);
+    // Return hanya hard skills untuk dashboard
+    return allSkills;
+  }, [skillGaps, recommendedRole, profile]);
+  
+  // Separate hard skills and soft skills
+  const { hardSkills, softSkills } = useMemo(() => {
+    return separateSkillsByCategory(skillGapData);
+  }, [skillGapData]);
 
   // Level kompetensi: Junior, Menengah, Pro
   const competenceLevel = useMemo(() => {
@@ -320,6 +389,8 @@ export function useDashboardLogic() {
     // Charts data
     radarData,
     skillGapData,
+    hardSkills,
+    softSkills,
     topStrengths,
     
     // Metrics

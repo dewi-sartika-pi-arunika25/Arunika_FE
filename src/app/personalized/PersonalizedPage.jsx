@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import Sidebar from "./components/Sidebar";
 import AnalisisAI from "./components/AnalisisAI";
 import ArunaQuest from "./components/ArunaQuest";
@@ -18,7 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Target, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function PersonalizedPage() {
+function PersonalizedPageContent() {
   // Filter state
   const filters = useDashboardFilters();
   const searchParams = useSearchParams();
@@ -187,5 +187,20 @@ export default function PersonalizedPage() {
         setOpen={setProfileModalOpen}
       />
     </div>
+  );
+}
+
+export default function PersonalizedPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E4B200] mx-auto mb-4"></div>
+          <p className="text-gray-600">Memuat data...</p>
+        </div>
+      </div>
+    }>
+      <PersonalizedPageContent />
+    </Suspense>
   );
 }

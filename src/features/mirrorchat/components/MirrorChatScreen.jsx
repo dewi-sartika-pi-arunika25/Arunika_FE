@@ -4,7 +4,9 @@ import { Bot } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useMirrorChatStore } from "../store/chat.store";
 import { MirrorChatAPI } from "../lib/ApiAdapter";
-import { trackConfusion, mentorRecommendation, resetConfusion, aiReflectionGuard } from "../lib/guards";
+import { trackConfusion,  resetConfusion, aiReflectionGuard, fetchPersonalizedData } from "../lib/guards";
+import { usePersonalizedProfile } from "@/hooks/usePersonalizedProfile";
+import { useAuthStore } from "@/lib/store/auth";
 import MessageBubble from "./MessageBubble";
 import ChatHeader from "./ChatHeader";
 import ChatInput from "./ChatInput";
@@ -12,18 +14,120 @@ import ChatInput from "./ChatInput";
 export default function MirrorChatScreen() {
   const { data: session } = useSession();
   const userId = session?.user?.id || session?.user?.email || "anon";
-  const displayName = session?.user?.name || session?.user?.email || "Tamu";
+  const sessionName = session?.user?.name || session?.user?.email || "Tamu";
+
+  // Gunakan usePersonalizedProfile untuk mendapatkan user name (sama seperti Header)
+  const authStore = useAuthStore();
+  const { user } = usePersonalizedProfile();
+  const authUserName = authStore.user?.user_metadata?.name || authStore.user?.name || authStore.profile?.name;
+  
+  // Prioritas: authUserName > user?.name dari usePersonalizedProfile > userName dari store > sessionName
+  // Ini memastikan nama di Mirror Chat sama dengan yang di Header
+  const headerDisplayName = authUserName || user?.name || 'Pengguna';
 
   const messages = useMirrorChatStore((s) => s.messages);
   const hasWelcomed = useMirrorChatStore((s) => s.hasWelcomed);
+  const personalizedData = useMirrorChatStore((s) => s.personalizedData);
+  const userName = useMirrorChatStore((s) => s.userName);
   const addMessage = useMirrorChatStore((s) => s.addMessage);
   const clearMessages = useMirrorChatStore((s) => s.clearMessages);
   const setHasWelcomed = useMirrorChatStore((s) => s.setHasWelcomed);
+  const setPersonalizedData = useMirrorChatStore((s) => s.setPersonalizedData);
+  const setUserName = useMirrorChatStore((s) => s.setUserName);
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Helper function untuk resolve user name (sama seperti usePersonalizedProfile)
+  const resolveUserName = (userObjOrString, fallback) => {
+    if (typeof userObjOrString === 'string') return userObjOrString;
+    if (!userObjOrString || typeof userObjOrString !== 'object') {
+      return typeof fallback === 'string' ? fallback : sessionName;
+    }
+    const candidates = [
+      userObjOrString.display_name,
+      userObjOrString.full_name,
+      userObjOrString.name,
+      userObjOrString.nama,
+      userObjOrString.username,
+      typeof fallback === 'string' ? fallback : null
+    ].filter(Boolean);
+    return candidates[0] || sessionName;
+  };
+
+  // Load personalized data saat component mount atau userId berubah
+  // HANYA fetch sekali saat mount, tidak perlu fetch lagi di handleSend (akan menggunakan cached data)
+  useEffect(() => {
+    if (userId && userId !== "anon" && !personalizedData) {
+      let isMounted = true; // Flag untuk mencegah state update setelah unmount
+      
+      const loadPersonalizedData = async () => {
+        try {
+          const data = await fetchPersonalizedData(userId).catch(err => {
+            // Catch error untuk mencegah unhandled rejection
+            // fetchPersonalizedData sudah handle error internal, jadi return empty object
+            console.warn("[MirrorChat] Error loading personalized data:", err?.message || err);
+            return {
+              userInfo: null,
+              personalizedData: null,
+              assessmentData: null,
+              computedValues: null,
+            };
+          });
+          
+          // Only update state if component is still mounted
+          if (!isMounted) return;
+          
+          // Store personalized data (bahkan jika partial)
+          if (data) {
+            setPersonalizedData(data);
+          }
+          
+          // Update user name dari data jika ada (prioritas lebih rendah dari headerDisplayName)
+          if (data?.userInfo && !headerDisplayName) {
+            const extractedName = resolveUserName(data.userInfo, sessionName);
+            if (extractedName && extractedName !== sessionName && extractedName !== 'Pengguna') {
+              setUserName(extractedName);
+            }
+          }
+        } catch (error) {
+          // Error sudah di-handle di fetchPersonalizedData
+          // Pastikan nama tetap ter-set dari headerDisplayName
+          if (!isMounted) return;
+          if (!userName && !headerDisplayName) {
+            setUserName(sessionName);
+          }
+        }
+      };
+      
+      loadPersonalizedData();
+      
+      // Cleanup function untuk mencegah state update setelah unmount
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [userId, sessionName, setPersonalizedData, setUserName, userName, personalizedData, headerDisplayName]);
+
+  // Gunakan headerDisplayName sebagai prioritas utama (sama seperti Header.jsx)
+  // Ini memastikan nama di Mirror Chat sinkron dengan Header dashboard
+  const displayName = headerDisplayName || userName || sessionName;
+  
+  // Build userProfile object untuk ChatHeader (sama seperti PersonalizedPage)
+  const userProfile = {
+    name: displayName,
+    initials: (displayName?.match(/\b\w/g) || []).slice(0, 2).join('').toUpperCase() || "US",
+    photo: null,
+  };
+  
+  // Sync userName di store dengan headerDisplayName jika berbeda
+  useEffect(() => {
+    if (headerDisplayName && headerDisplayName !== userName && headerDisplayName !== 'Pengguna') {
+      setUserName(headerDisplayName);
+    }
+  }, [headerDisplayName, userName, setUserName]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -44,12 +148,27 @@ export default function MirrorChatScreen() {
       // Cek apakah ini first message (belum ada welcome message)
       const isFirstMessage = !hasWelcomed && messages.length === 0;
       
+      // Refresh personalized data HANYA jika belum ada sama sekali (untuk first message)
+      // Jangan fetch lagi jika sudah ada - gunakan cached data untuk menghindari duplicate fetch
+      let currentPersonalizedData = personalizedData;
+      if (!currentPersonalizedData && userId && userId !== "anon") {
+        try {
+          currentPersonalizedData = await fetchPersonalizedData(userId);
+          setPersonalizedData(currentPersonalizedData);
+        } catch (error) {
+          // Continue dengan null jika fetch gagal - aiReflectionGuard akan handle
+          console.warn("[MirrorChat] Could not fetch personalized data:", error);
+        }
+      }
+      
       // Gunakan AI Reflection Guard untuk personalisasi berdasarkan role fit analysis
+      // Pass cached personalizedData untuk menghindari duplicate fetch di aiReflectionGuard
       const reply = await aiReflectionGuard(
         userId,
         value,
         session?.user || {},
-        isFirstMessage
+        isFirstMessage,
+        currentPersonalizedData // Pass cached data untuk menghindari duplicate fetch
       );
 
       // Mark sebagai sudah di-welcome setelah first message
@@ -87,7 +206,7 @@ export default function MirrorChatScreen() {
       <div className="mc-card">
         <div className="mc-viewport">
           <div className="mc-header">
-            <ChatHeader name={displayName} />
+            <ChatHeader userProfile={userProfile} />
           </div>
 
           <div className="mc-scroll space-y-6 pr-2">

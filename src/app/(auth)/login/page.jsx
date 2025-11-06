@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Card,
@@ -12,12 +12,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, LogIn, Home } from "lucide-react";
+import { Mail, Lock, LogIn, Home, Eye, EyeOff } from "lucide-react";
 import { signIn, useSession, getSession } from "next-auth/react";
 import Link from "next/link";
 import { authAPI } from "@/lib/api";
 import { FcGoogle } from "react-icons/fc";
 import { useAuthStore } from "@/lib/store/auth";
+import { extractErrorMessage, formatApiError } from "@/lib/utils/errorHandler";
 
 const Separator = () => (
   <div className="relative my-4">
@@ -34,7 +35,7 @@ const Separator = () => (
 
 const getRedirectPath = (hasAssessment) => hasAssessment ? '/personalized' : '/skill-match';
 
-export default function LoginPage() {
+function LoginContent() {
   const searchParams = useSearchParams();
   const login = useAuthStore((state) => state.login);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -42,6 +43,7 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const processingOAuthRef = useRef(false);
   const hasProcessedRef = useRef(false);
 
@@ -200,28 +202,16 @@ export default function LoginPage() {
         setError(response?.data?.message || "Login gagal. Periksa kredensial Anda.");
       }
     } catch (err) {
-      console.error('Login error:', err);
-      let errorMessage = "Terjadi kesalahan saat login. Silakan coba lagi.";
-      
-      if (err?.response?.data) {
-        const errorData = err.response.data;
-        errorMessage = errorData?.error?.message || 
-                      errorData?.error || 
-                      errorData?.message || 
-                      errorData?.data?.message ||
-                      (typeof errorData === 'string' ? errorData : errorMessage);
-      } else if (err?.response?.status === 401) {
-        errorMessage = "Email atau kata sandi salah. Silakan coba lagi.";
-      } else if (err?.response?.status === 404) {
-        errorMessage = "Backend tidak dapat diakses. Pastikan server backend berjalan.";
-      } else if (err?.response?.status >= 500) {
-        errorMessage = "Terjadi kesalahan pada server. Silakan coba lagi nanti.";
-      } else if (err?.message) {
-        errorMessage = err.message;
-      } else if (typeof err === 'string') {
-        errorMessage = err;
+      // Only log meaningful errors in development
+      if (process.env.NODE_ENV === 'development') {
+        const errorMsg = extractErrorMessage(err);
+        if (errorMsg) {
+          console.error('Login error:', errorMsg);
+        }
       }
       
+      // Use centralized error formatting
+      const errorMessage = formatApiError(err, "Terjadi kesalahan saat login. Silakan coba lagi.");
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -302,17 +292,30 @@ export default function LoginPage() {
                 </a>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Masukkan kata sandi Anda"
                   value={formData.password}
                   onChange={handleChange}
                   required
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   disabled={isLoading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none z-10"
+                  disabled={isLoading}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -336,5 +339,20 @@ export default function LoginPage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Memuat...</p>
+        </div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

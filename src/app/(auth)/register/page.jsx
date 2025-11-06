@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { authAPI } from '@/lib/api'; // ✅ FIX: sebelumnya '@/app/lib/api'
 import { FcGoogle } from "react-icons/fc";
 import { useAuthStore } from "@/lib/store/auth";
+import { extractErrorMessage, formatApiError } from "@/lib/utils/errorHandler";
 
 
 const Separator = () => (
@@ -83,68 +84,16 @@ export default function RegisterPage() {
         }, 2000);
       }
     } catch (err) {
-      console.error('Register error:', err);
-      console.error('Error response data:', err?.response?.data);
-      
-      // Extract error message dari berbagai kemungkinan struktur
-      let errorMessage = 'Pendaftaran gagal. Silakan coba lagi.';
-      
-      if (err?.response?.data) {
-        const errorData = err.response.data;
-        
-        // Handle error object dengan keys {code, message, details}
-        // Format: { success: false, error: { code: "...", message: "..." } }
-        if (errorData?.error) {
-          if (typeof errorData.error === 'string') {
-            errorMessage = errorData.error;
-          } else if (typeof errorData.error === 'object') {
-            // Extract message dari error object
-            if (errorData.error.message) {
-              errorMessage = errorData.error.message;
-            } else if (errorData.error.code) {
-              // Use code as fallback if no message
-              errorMessage = errorData.error.code;
-            } else if (errorData.error.details) {
-              // Handle details - bisa string atau object
-              if (typeof errorData.error.details === 'string') {
-                errorMessage = errorData.error.details;
-              } else if (Array.isArray(errorData.error.details)) {
-                errorMessage = errorData.error.details.join(', ');
-              } else if (typeof errorData.error.details === 'object') {
-                errorMessage = Object.values(errorData.error.details).filter(v => typeof v === 'string').join(', ') || errorMessage;
-              }
-            } else {
-              // Fallback: coba extract dari keys yang ada
-              errorMessage = Object.values(errorData.error).find(v => typeof v === 'string') || errorMessage;
-            }
-          }
-        } else if (errorData?.message) {
-          errorMessage = errorData.message;
-        } else if (typeof errorData === 'string') {
-          errorMessage = errorData;
+      // Only log in development, and only meaningful errors
+      if (process.env.NODE_ENV === 'development') {
+        const errorMsg = extractErrorMessage(err);
+        if (errorMsg) {
+          console.error('Register error:', errorMsg);
         }
-      } else if (err?.response?.status === 400) {
-        errorMessage = 'Data yang dimasukkan tidak valid. Periksa kembali semua field.';
-      } else if (err?.response?.status === 409) {
-        errorMessage = 'Email sudah terdaftar. Gunakan email lain atau login.';
-      } else if (err?.response?.status === 401) {
-        errorMessage = 'Autentikasi gagal. Silakan coba lagi.';
-      } else if (err?.response?.status === 404) {
-        errorMessage = 'Backend tidak dapat diakses. Pastikan server backend berjalan.';
-      } else if (err?.response?.status >= 500) {
-        errorMessage = 'Terjadi kesalahan pada server. Silakan coba lagi nanti.';
-      } else if (err?.message) {
-        errorMessage = err.message;
-      } else if (typeof err === 'string') {
-        errorMessage = err;
       }
       
-      // Pastikan errorMessage selalu string (jika masih object, stringify)
-      if (typeof errorMessage !== 'string') {
-        console.warn('Error message is not a string, stringifying:', errorMessage);
-        errorMessage = JSON.stringify(errorMessage);
-      }
-      
+      // Use centralized error formatting
+      const errorMessage = formatApiError(err, 'Pendaftaran gagal. Silakan coba lagi.');
       setError(errorMessage);
     } finally {
       setIsLoading(false);
