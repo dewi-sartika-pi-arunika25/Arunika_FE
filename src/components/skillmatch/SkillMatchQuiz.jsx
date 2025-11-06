@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Brain, Loader, Sparkles, CheckCircle2 } from 'lucide-react';
+import HardSkillAssessment from './HardSkillAssessment';
 import { COLORS, TRAIT_COLORS, ASSESSMENT } from '@/lib/config/constants';
 import { assessmentAPI } from '@/lib/api';
 import { getWithExpiry } from '@/lib/utils/storage';
@@ -28,7 +29,11 @@ export default function SkillMatchQuiz() {
     handleSubmit,
     answeredCount,
     totalQuestions,
-    progress
+    progress,
+    showHardSkillAssessment,
+    recommendedRole,
+    handleHardSkillSubmit,
+    handleHardSkillSkip,
   } = useDISCRIASEC();
 
   // Check if user already has assessment results

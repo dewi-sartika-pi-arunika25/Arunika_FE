@@ -1,6 +1,9 @@
 "use client";
 
-export default function ChatHeader({ name }) {
+export default function ChatHeader({ userProfile = {} }) {
+  // Fallback untuk name jika userProfile tidak ada atau name tidak ada
+  const displayName = userProfile?.name || "Pengguna";
+  
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex items-baseline gap-2">
@@ -14,7 +17,7 @@ export default function ChatHeader({ name }) {
                 color: "color-mix(in oklab, var(--text) 82%, transparent)",
                 border: "1px solid color-mix(in oklab, var(--accent-3) 75%, transparent)"
               }}>
-          {name}
+          {displayName}
         </span>
       </div>
       <div className="hidden sm:block text-sm"

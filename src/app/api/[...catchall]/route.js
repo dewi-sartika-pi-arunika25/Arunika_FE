@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { logInfo, logError } from '@/lib/utils/logger';
+import { API_BASE_URL, forwardSetCookieHeaders } from '@/lib/utils/errorHandler';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const BACKEND_URL = API_BASE_URL;
 
 // Debug: Log backend URL in development
 if (process.env.NODE_ENV === 'development') {
@@ -36,29 +37,33 @@ async function proxyRequest(request, context) {
     // Example: /api/assessment/start -> assessment/start
     const urlPath = url.pathname;
     
-    // ✅ CRITICAL: Skip NextAuth routes
-    // In Next.js, /api/auth/[...nextauth] is MORE SPECIFIC than /api/[...catchall]
-    // So Next.js should route to /api/auth/[...nextauth] FIRST, not catch-all
-    // If we reach here for /api/auth/*, something is wrong with Next.js routing
-    // But let's handle it gracefully by NOT proxying
+    // ✅ CRITICAL: Skip NextAuth routes (signin, signout, callback, session, etc.)
+    // But allow /api/auth/register and /api/auth/login to be proxied to backend
+    // NextAuth routes: signin, signout, callback, session, csrf, providers, etc.
+    const nextAuthRoutes = ['signin', 'signout', 'callback', 'session', 'csrf', 'providers', 'error'];
+    const pathSegments = urlPath.split('/').filter(Boolean);
+    
+    // Check if this is a NextAuth route (not register/login)
     if (urlPath.startsWith('/api/auth/')) {
-      logInfo('[Catch-all] NextAuth route detected - this should not reach catch-all!', urlPath);
-      logInfo('[Catch-all] Next.js should route this to /api/auth/[...nextauth]/route.js');
-      logInfo('[Catch-all] Check if /api/auth/[...nextauth]/route.js exists and is properly configured');
+      const authRoute = pathSegments[2]; // Get the route after /api/auth/
       
-      // Don't proxy, but also don't return 404 - let Next.js handle it
-      // Actually, if we're here, Next.js routing failed
-      // Return 500 to indicate internal routing error
-      return NextResponse.json(
-        { 
-          success: false,
-          error: 'Internal routing error',
-          message: 'NextAuth route should be handled by /api/auth/[...nextauth] but reached catch-all',
-          hint: 'Check Next.js route configuration',
-          timestamp: new Date().toISOString()
-        },
-        { status: 500 }
-      );
+      // If it's a NextAuth route (not register/login), skip proxying
+      if (nextAuthRoutes.includes(authRoute)) {
+        logInfo('[Catch-all] NextAuth route detected - skipping proxy:', urlPath);
+        // Return 500 to indicate this should be handled by NextAuth
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'Internal routing error',
+            message: 'NextAuth route should be handled by /api/auth/[...nextauth] but reached catch-all',
+            hint: 'Check Next.js route configuration',
+            timestamp: new Date().toISOString()
+          },
+          { status: 500 }
+        );
+      }
+      // If it's /api/auth/register or /api/auth/login, continue to proxy to backend
+      logInfo('[Catch-all] Backend auth route (register/login) - proxying:', urlPath);
     }
     
     const path = urlPath.startsWith('/api/') 
@@ -83,11 +88,22 @@ async function proxyRequest(request, context) {
 
     // Build backend URL from environment variable
     // BACKEND_URL comes from NEXT_PUBLIC_API_URL env variable
-    // path format: assessment/start
-    // Result: {BACKEND_URL}/assessment/start
+    // BACKEND_URL should already include /api (e.g., http://localhost:5000/api)
+    // path format: gemini, assessment/start, etc.
+    // Result: {BACKEND_URL}/gemini or {BACKEND_URL}/assessment/start
     const cleanBackendUrl = BACKEND_URL.replace(/\/$/, ''); // Remove trailing slash
     const cleanPath = path.startsWith('/') ? path.slice(1) : path; // Remove leading slash
-    const backendUrl = `${cleanBackendUrl}/${cleanPath}${url.search}`;
+    
+    // Ensure backend URL includes /api prefix
+    // If BACKEND_URL doesn't end with /api, add it
+    let backendUrl;
+    if (cleanBackendUrl.endsWith('/api')) {
+      // BACKEND_URL already includes /api, just append path
+      backendUrl = `${cleanBackendUrl}/${cleanPath}${url.search}`;
+    } else {
+      // BACKEND_URL doesn't include /api, add it
+      backendUrl = `${cleanBackendUrl}/api/${cleanPath}${url.search}`;
+    }
     
     // Debug logging
     logInfo(`[Proxy] ${request.method} ${url.pathname}`);
@@ -145,21 +161,8 @@ async function proxyRequest(request, context) {
       status: response.status,
     });
 
-    // Forward Set-Cookie headers from backend (important for httpOnly cookies)
-    // Backend may send multiple Set-Cookie headers (access_token, refresh_token)
-    const setCookieHeaders = response.headers.getSetCookie?.() || [];
-    if (setCookieHeaders.length > 0) {
-      // Forward each Set-Cookie header
-      setCookieHeaders.forEach(cookie => {
-        nextResponse.headers.append('Set-Cookie', cookie);
-      });
-    } else {
-      // Fallback for older fetch implementations
-      const setCookieHeader = response.headers.get('set-cookie');
-      if (setCookieHeader) {
-        nextResponse.headers.set('Set-Cookie', setCookieHeader);
-      }
-    }
+    // Forward Set-Cookie headers from backend using centralized utility
+    forwardSetCookieHeaders(response, nextResponse);
 
     return nextResponse;
 

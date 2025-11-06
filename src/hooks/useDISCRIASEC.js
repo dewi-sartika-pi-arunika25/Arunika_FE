@@ -27,6 +27,8 @@ export function useDISCRIASEC() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState(null);
+  const [showHardSkillAssessment, setShowHardSkillAssessment] = useState(false);
+  const [recommendedRole, setRecommendedRole] = useState(null);
 
   // Load questions dari endpoint baru /assessment/start
   useEffect(() => {
@@ -115,22 +117,33 @@ export function useDISCRIASEC() {
       // Store results
       setResults(resultData);
 
-      // Store di localStorage dengan expiry 24 jam (bukan sessionStorage)
-      if (typeof window !== 'undefined') {
-        try {
-          // Set dengan expiry 24 jam
-          setWithExpiry(STORAGE_KEYS.DISC_RIASEC_RESULTS, resultData, 24);
-          setWithExpiry(STORAGE_KEYS.ASSESSMENT_TYPE, 'DISC_RIASEC', 24);
-          logInfo('✅ Assessment results saved to localStorage (24h expiry)');
-        } catch (storageError) {
-          logWarning('⚠️ Failed to store results in localStorage:', storageError);
+      // Extract recommended role dari job recommendations
+      const recommendations = resultData.recommendations || [];
+      const topRecommendation = recommendations.length > 0 ? recommendations[0] : null;
+      const role = topRecommendation?.role || topRecommendation?.job_title || null;
+      
+      if (role) {
+        setRecommendedRole(role);
+        setShowHardSkillAssessment(true);
+        logInfo(`✅ Showing hard skill assessment for role: ${role}`);
+      } else {
+        // Jika tidak ada role, langsung redirect
+        logWarning('⚠️ No recommended role found, skipping hard skill assessment');
+        // Store di localStorage tanpa expiry (assessment cache tidak expire)
+        if (typeof window !== 'undefined') {
+          try {
+            setWithExpiry(STORAGE_KEYS.DISC_RIASEC_RESULTS, resultData, null);
+            setWithExpiry(STORAGE_KEYS.ASSESSMENT_TYPE, 'DISC_RIASEC', null);
+            logInfo('✅ Assessment results saved to localStorage (no expiry - permanent)');
+          } catch (storageError) {
+            logWarning('⚠️ Failed to store results in localStorage:', storageError);
+          }
         }
+        // Auto-redirect ke hasil atau personalized page
+        setTimeout(() => {
+          router.push('/personalized?assessment=disc_riasec');
+        }, 500);
       }
-
-      // Auto-redirect ke hasil atau personalized page
-      setTimeout(() => {
-        router.push('/personalized?assessment=disc_riasec');
-      }, 500);
 
     } catch (err) {
       logError('❌ Submit error:', err);
@@ -144,6 +157,73 @@ export function useDISCRIASEC() {
   const totalQuestions = questions.length;
   const progress = calculateProgress(answeredCount, totalQuestions);
 
+  // Handle hard skill assessment submit
+  const handleHardSkillSubmit = async (skillAssessment) => {
+    try {
+      logInfo('📤 Submitting hard skill assessment...', skillAssessment);
+      
+      // Store hard skill assessment results
+      const updatedResults = {
+        ...results,
+        hardSkillAssessment: skillAssessment,
+        recommendedRole: recommendedRole
+      };
+
+      // Store di localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          setWithExpiry(STORAGE_KEYS.DISC_RIASEC_RESULTS, updatedResults, null);
+          logInfo('✅ Hard skill assessment saved to localStorage');
+        } catch (storageError) {
+          logWarning('⚠️ Failed to store hard skill assessment:', storageError);
+        }
+      }
+
+      // ✅ Submit ke backend API untuk menyimpan hard skill assessment
+      // Note: userId akan diambil oleh backend dari req.userId (via requireAuth middleware)
+      try {
+        await assessmentAPI.submitHardSkillAssessment({
+          skillAssessment,
+          recommendedRole
+          // userId tidak perlu dikirim - backend akan ambil dari auth token
+        });
+        logInfo('✅ Hard skill assessment saved to backend');
+      } catch (apiErr) {
+        logWarning('⚠️ Failed to save hard skill assessment to backend:', apiErr);
+        // Continue anyway - data sudah di localStorage
+      }
+
+      // Redirect ke personalized page
+      setTimeout(() => {
+        router.push('/personalized?assessment=disc_riasec&hard_skill=true');
+      }, 500);
+    } catch (err) {
+      logError('❌ Hard skill assessment submit error:', err);
+      // Continue anyway - redirect to personalized
+      setTimeout(() => {
+        router.push('/personalized?assessment=disc_riasec');
+      }, 500);
+    }
+  };
+
+  // Handle skip hard skill assessment
+  const handleHardSkillSkip = () => {
+    logInfo('⏭️ User skipped hard skill assessment');
+    // Store results tanpa hard skill assessment
+    if (typeof window !== 'undefined' && results) {
+      try {
+        setWithExpiry(STORAGE_KEYS.DISC_RIASEC_RESULTS, results, null);
+        setWithExpiry(STORAGE_KEYS.ASSESSMENT_TYPE, 'DISC_RIASEC', null);
+      } catch (storageError) {
+        logWarning('⚠️ Failed to store results:', storageError);
+      }
+    }
+    // Redirect ke personalized page
+    setTimeout(() => {
+      router.push('/personalized?assessment=disc_riasec');
+    }, 500);
+  };
+
   return {
     questions,
     answers,
@@ -156,6 +236,10 @@ export function useDISCRIASEC() {
     answeredCount,
     totalQuestions,
     progress,
+    showHardSkillAssessment,
+    recommendedRole,
+    handleHardSkillSubmit,
+    handleHardSkillSkip,
   };
 }
 

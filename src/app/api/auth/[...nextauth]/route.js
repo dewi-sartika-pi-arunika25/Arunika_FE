@@ -3,9 +3,8 @@
 // This is needed because NextAuth might not respect basePath correctly
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-
-// Use environment variable for backend API URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { NextResponse } from "next/server";
+import { API_BASE_URL, forwardSetCookieHeaders } from '@/lib/utils/errorHandler';
 
 // Validate required environment variables
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
@@ -387,6 +386,69 @@ export async function GET(req, context) {
 export async function POST(req, context) {
   const url = new URL(req.url);
   const pathname = url.pathname;
+  
+  // ✅ CRITICAL: Skip /api/auth/login and /api/auth/register - these should be proxied to backend
+  // NextAuth handler should only handle OAuth routes (signin, signout, callback, session, etc.)
+  if (pathname === '/api/auth/login' || pathname === '/api/auth/register') {
+    console.log('⚠️ NextAuth POST: Skipping backend auth route (should be handled by catch-all proxy):', pathname);
+    
+    // ✅ Fix: Remove /api prefix from pathname since API_BASE_URL already includes /api
+    // pathname: /api/auth/login → backendPath: /auth/login
+    // API_BASE_URL: http://localhost:5000/api
+    // Result: http://localhost:5000/api/auth/login (correct)
+    const backendPath = pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
+    const backendUrl = `${API_BASE_URL}${backendPath}${url.search || ''}`;
+    
+    console.log('📤 NextAuth POST: Proxying to backend:', {
+      pathname,
+      backendPath,
+      backendUrl,
+      API_BASE_URL
+    });
+    
+    try {
+      const body = await req.text();
+      const headers = {
+        'Content-Type': 'application/json',
+        'Cookie': req.headers.get('cookie') || '',
+        'Authorization': req.headers.get('authorization') || '',
+      };
+      
+      const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers,
+        body: body || undefined,
+      });
+      
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = responseText;
+      }
+      
+      // Create NextResponse with proper status and forward Set-Cookie headers
+      const nextResponse = NextResponse.json(responseData, {
+        status: response.status,
+      });
+      
+      // Forward Set-Cookie headers from backend using centralized utility
+      forwardSetCookieHeaders(response, nextResponse);
+      
+      console.log('✅ NextAuth POST: Proxied backend auth route:', pathname, '→', backendUrl);
+      return nextResponse;
+    } catch (error) {
+      console.error('❌ NextAuth POST: Error proxying backend auth route:', error);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to proxy request to backend',
+        message: error.message,
+      }, {
+        status: 502,
+      });
+    }
+  }
   
   console.log('📥 NextAuth POST handler called:', {
     pathname

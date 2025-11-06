@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDashboardLogic } from "@/hooks/useDashboardLogic";
 import {
@@ -42,6 +43,8 @@ export default function DashboardContent({ filters = null }) {
     pieData,
     radarData,
     skillGapData,
+    hardSkills,
+    softSkills,
     topStrengths,
     competenceLevel,
     levelSkillGap,
@@ -53,9 +56,24 @@ export default function DashboardContent({ filters = null }) {
     pct,
   } = useDashboardLogic();
 
+  // State untuk tab active (all, hard, soft) - default ke 'hard' untuk hanya tampilkan hard skill
+  const [activeSkillTab, setActiveSkillTab] = useState('hard');
+  
   // Apply filters jika tersedia
   const filteredJobs = filters ? filters.filterJobs(jobData) : jobData;
-  const filteredSkillGaps = filters ? filters.filterSkillGaps(skillGapData) : skillGapData;
+  
+  // Filter skill gaps berdasarkan tab aktif
+  const getFilteredSkillsByTab = () => {
+    let skillsToFilter = skillGapData;
+    if (activeSkillTab === 'hard') {
+      skillsToFilter = hardSkills || [];
+    } else if (activeSkillTab === 'soft') {
+      skillsToFilter = softSkills || [];
+    }
+    return filters ? filters.filterSkillGaps(skillsToFilter) : skillsToFilter;
+  };
+  
+  const filteredSkillGaps = getFilteredSkillsByTab();
   const filteredNextSteps = filters ? filters.filterNextSteps(nextSteps) : nextSteps;
   const filteredStrengths = filters ? filters.filterStrengths(topStrengths) : topStrengths;
 
@@ -336,6 +354,46 @@ export default function DashboardContent({ filters = null }) {
             </h4>
             <div className="text-sm text-gray-600">Rata-rata: {pct(levelSkillGap)}</div>
           </div>
+
+          {/* Tab untuk Hard Skill vs Soft Skill */}
+          {hardSkills.length > 0 || softSkills.length > 0 ? (
+            <div className="mb-3 flex gap-2 border-b border-gray-200">
+              <button
+                onClick={() => setActiveSkillTab('all')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeSkillTab === 'all' 
+                    ? 'border-b-2 border-[#E4B200] text-[#E4B200]' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Semua ({skillGapData.length})
+              </button>
+              {hardSkills.length > 0 && (
+                <button
+                  onClick={() => setActiveSkillTab('hard')}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    activeSkillTab === 'hard' 
+                      ? 'border-b-2 border-[#E4B200] text-[#E4B200]' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Hard Skill ({hardSkills.length})
+                </button>
+              )}
+              {softSkills.length > 0 && (
+                <button
+                  onClick={() => setActiveSkillTab('soft')}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    activeSkillTab === 'soft' 
+                      ? 'border-b-2 border-[#E4B200] text-[#E4B200]' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Soft Skill ({softSkills.length})
+                </button>
+              )}
+            </div>
+          ) : null}
 
           <div style={{ height: 240, width: '100%' }}>
             {filteredSkillGaps && filteredSkillGaps.length > 0 ? (

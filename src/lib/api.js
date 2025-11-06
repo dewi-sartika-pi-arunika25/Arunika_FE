@@ -133,8 +133,11 @@ api.interceptors.response.use(
     switch (error.response?.status) {
       case 400:
         // Bad Request - usually validation errors
-        if (process.env.NODE_ENV === 'development') {
-          console.error('❌ 400 Bad Request:', error.response?.data);
+        // Don't log here - let the component handle the error message
+        // Only log in development if it's not a validation error (to avoid spam)
+        if (process.env.NODE_ENV === 'development' && !error.response?.data?.error?.message) {
+          // Only log if there's no meaningful error message (unexpected error)
+          console.warn('⚠️ 400 Bad Request (no error message):', error.response?.data);
         }
         break;
       
@@ -169,8 +172,12 @@ api.interceptors.response.use(
 
     // Log all errors in development (with safety checks)
     // Skip logging for 404 errors (expected for missing resources)
+    // Skip logging for 400 errors if they have error message (component will handle it)
     const statusCode = error?.response?.status || error?.status;
-    const shouldLog = process.env.NODE_ENV === 'development' && statusCode !== 404;
+    const hasErrorMessage = error?.response?.data?.error?.message || error?.response?.data?.message;
+    const shouldLog = process.env.NODE_ENV === 'development' && 
+                      statusCode !== 404 && 
+                      !(statusCode === 400 && hasErrorMessage); // Skip 400 if has error message
     
     if (shouldLog) {
       try {
@@ -182,9 +189,51 @@ api.interceptors.response.use(
           data: error?.response?.data || error?.data || null,
           code: error?.code || null,
         };
-        // Only log if errorInfo has meaningful data
-        if (errorInfo.url !== 'Unknown' || errorInfo.status || errorInfo.message !== 'Unknown error') {
-          console.error('❌ API Error:', errorInfo);
+        
+        // Only log if errorInfo has meaningful data (not empty object)
+        const hasUrl = errorInfo.url && errorInfo.url !== 'Unknown' && typeof errorInfo.url === 'string';
+        const hasStatus = errorInfo.status !== null && errorInfo.status !== undefined && typeof errorInfo.status === 'number';
+        const hasMessage = errorInfo.message && errorInfo.message !== 'Unknown error' && typeof errorInfo.message === 'string';
+        const hasData = errorInfo.data !== null && errorInfo.data !== undefined && 
+                       (typeof errorInfo.data === 'object' ? Object.keys(errorInfo.data).length > 0 : true);
+        const hasCode = errorInfo.code && typeof errorInfo.code === 'string';
+        
+        // Build meaningful error object only with actual values
+        const meaningfulError = {};
+        if (hasUrl) meaningfulError.url = errorInfo.url;
+        if (hasStatus) meaningfulError.status = errorInfo.status;
+        if (hasMessage) meaningfulError.message = errorInfo.message;
+        if (hasData) {
+          // Only include data if it's not empty object
+          if (typeof errorInfo.data === 'object' && !Array.isArray(errorInfo.data)) {
+            const dataKeys = Object.keys(errorInfo.data).filter(key => {
+              const value = errorInfo.data[key];
+              return value !== null && value !== undefined && value !== '';
+            });
+            if (dataKeys.length > 0) {
+              meaningfulError.data = errorInfo.data;
+            }
+          } else {
+            meaningfulError.data = errorInfo.data;
+          }
+        }
+        if (hasCode) meaningfulError.code = errorInfo.code;
+        
+        // Only log if meaningfulError has at least one meaningful field
+        const meaningfulKeys = Object.keys(meaningfulError).filter(key => {
+          const value = meaningfulError[key];
+          if (value === null || value === undefined || value === '') return false;
+          if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) return false;
+          return true;
+        });
+        
+        if (meaningfulKeys.length > 0) {
+          // Build final error object with only meaningful keys
+          const finalError = {};
+          meaningfulKeys.forEach(key => {
+            finalError[key] = meaningfulError[key];
+          });
+          console.error('❌ API Error:', finalError);
         }
       } catch (logError) {
         // Silently fail - don't log if logging itself fails
@@ -205,8 +254,7 @@ export const authAPI = {
   /** Register new user account */
   register: (data) => api.post('/auth/register', data),
   /** Login with email and password */
-  login: (email, password) =>
-    axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, { email, password }),
+  login: (email, password) => api.post('/auth/login', { email, password }),
   /** Logout current user */
   logout: () => api.post('/auth/logout'),
   /** Get current user profile */
@@ -251,6 +299,8 @@ export const assessmentAPI = {
   getJobFitDetails: (jobId) => api.get(`/assessment/job-fit/${jobId}`),
   /** Trigger AI analysis refresh (requires auth) */
   refreshAIAnalysis: () => api.post('/assessment/refresh-ai'),
+  /** Submit hard skill assessment results (requires auth) */
+  submitHardSkillAssessment: (data) => api.post('/assessment/hard-skill', data),
 };
 
 // ============ JOBS ENDPOINTS ============
